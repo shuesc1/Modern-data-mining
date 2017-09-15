@@ -20,6 +20,7 @@ output:
 knitr::opts_chunk$set(echo = TRUE, eval = F)
 install.packages("dplyr")
 install.packages("ggplot2")
+install.packages("ggplot")
 library(dplyr)
 library(ggplot2)
 ```
@@ -533,6 +534,7 @@ $t$-interval and $t$-test can be constructed using the above results.
 
 For example, the 95% confidence interval for $\beta$ approximately takes the form
 
+<!-- 1.96 ~ 2 for 95% confidence interval -->
 $$\hat\beta ± 2 \cdot SE(\hat\beta).$$
 
 We can see below that the $SE(\beta)$ is included in the summary output

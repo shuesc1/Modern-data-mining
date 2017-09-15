@@ -1,0 +1,1059 @@
+---
+title: "Multiple Regression"
+author: 'STAT-471/571/701: Modern Data Mining'
+date: "September 2017"
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+<!-- tidyverse is a library of packages -->
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
+install.packages("car")
+install.packages("leaps")
+install.packages("contrast")
+library(car)   # Anova(): report F statistics
+library(leaps) # regsubsets(): model selection
+library(contrast) # not too important. 
+library(tidyverse)
+library(car)
+```
+
+\tableofcontents
+
+
+\pagebreak
+
+## Introduction 
+
+Read:
+
+* Chapter 3
+* Note: Many important topics are in Appendices. Please go through them.
+
+Objectives:
+ 1. Introduction to multiple regression
+    + Model specification
+    + General linear models
+    + LS estimates and their properties
+    + Inference
+ 2. Categorical predictors
+    + Adding categorical predictors to the multiple regression (ANOVA)
+    + Model with both continuous and categorical variables
+    + Models with or without interactions
+ 3. More about multiple Regression
+    + Modeling non-linear relationships
+    + Transformation of variables to meet linear model assumptions 
+    + Outliers, Leverage points
+ 4. Summary
+ 5. Appendices
+    
+\pagebreak
+
+### Case Study: Fuel Efficiency in Automobies
+
+Goal of the study: How to build a fuel efficient car?
+
+- Effects of features on a car
+- Given a set of features, we'd like to estimate the mean fuel efficiency as well as the efficiency of one car
+- Are Asian cars more efficient than cars built in other regions?
+
+We will use the "car_04_regular.csv" data set to perform a Case Study on fuel efficiency in automobiles. Below is a quick description of all the features in our dataset.
+
+<center>
+|Feature|Description|
+|--|---|
+|Continent|Continent the Car Company is From|
+|Horsepower|Horsepower of the Vehicle|
+|Weight|Weight of the vehicle (thousand lb)| 
+|Length|Length of the Vehicle (inches) |
+|Width|Width of the Vehicle (inches) |
+|Seating|Number of Seats in the Vehicle|
+|Cylinders|Number of Engine Cylinders|
+|Displacement|Volume displaced by the cylinders, defined as $\pi/4 \times bore^{2} \times stroke \times \text{Number of Cylinders}$|
+|Transmission|Type of Transmission (manual, automatic, continuous)|
+</center>
+
+Specifically, fuel efficiency is measured by $Y$ = `MPG_City` 
+
+  1. Effects of each feature on $Y$
+  2. Estimate 
+    - the mean `MPG_City` for all such cars specified below and
+    - predict $Y$ for the particular car described below
+  3. Are cars built by Asian more efficient?
+
+<center>
+|Feature|Value|
+|--|---|
+|Continent|America|
+|Horsepower|225|
+|Weight|4|
+|Length|180|
+|Width|80|
+|Seating|5|
+|Cylinders|4|
+|Displacement|3.5|
+|Transmission|automatic|
+</center>
+
+#### Exploratory Data Analysis
+
+It is always crucial to look at the data first. For the purpose of shortening the lecture time, we put this part in Appendix 1. There the original data "Car_04.csv" is cleaned and a new version called "car_04_regular.csv" is written out. 
+
+To summarize the EDA quickly, we excluded some high-performance cars with large Horsepower (HP > 400). We also take a subset of features, containing only the features described in the description table.
+
+#### Read the data           
+
+Clear Work space, set working directory, and read in data
+```{r eval =T}
+# rm(list=ls()) # Remove all the existing variables
+data1 <- read.csv("car_04_regular.csv", header=TRUE)
+```
+
+Quick exploration of data
+```{r}
+names(data1)
+dim(data1)   # 226 cars and 13 variables
+str(data1)
+head(data1)
+```
+
+
+#### Define a car for prediction used later
+
+```{r eval = T}
+newcar <-  data1[1, ]  # Create a new row with same structure as in data1
+newcar[1] <- "NA" # Assign features for the new car
+newcar[2] <- "Am"
+newcar["MPG_City"] <- "NA"
+newcar["MPG_Hwy"] <- "NA"
+newcar[5:11] <- c(225, 4, 180, 80, 5, 4, 3.5)
+newcar$Make <-  "NA"
+newcar[13] <- "automatic"
+newcar
+```
+
+
+\pagebreak
+
+## Introduction to Multiple regression
+
+
+### Model Specification
+
+#### How does `Length` affect `MPG_City`? 
+
+It depends on how we model the response. We will investigate three models with `Length`.
+
+For the ease of presentation, we define some predictors below that we will use in subsequent models:
+
+$$x_1 = Length, \quad x_2 = Horsepower, \quad x_3 = Width, \quad x_4 = Seating, \quad x_5 = Cylinders, \quad x_6 =  Displacement$$
+
+We will create three models:
+
+
+  **M1. Our first model will only contain one predictor, Length:**
+
+$$y_i = \beta_0 + \beta_1 \cdot x_{i1} + \epsilon$$ 
+**Interpreation of $\beta_1$** is that in general, the mean $y$ will change by $\beta_1$ if a car is 1" longer. So we can't really peel off the effect of the `Length` over $y$. 
+
+
+**M2. Next, we add the predictor `Horsepower` to our model**
+  
+$$y_i = \beta_0 + \beta_1 \cdot x_{i1} + \beta_2 \cdot x_{i2} + \epsilon$$
+
+**Interpreation of $\beta_1$** is that in general, the mean $y$ will change by $\beta_1$ if a car is 1" longer and the 'HorsePower's` are the same. 
+
+
+
+**M3. Finally, we fit a model with multiple predictors**
+
+$$y_i = \beta_0 + \beta_1 x_{i1} + \beta_2x_{i2} + \beta_3x_{i3} + \beta_4x_{i4} + \beta_5x_{i5} + \beta_6x_{i6} + \epsilon$$
+
+**Interpreation of $\beta_1$** is that in general, the mean $y$ will change by $\beta_1$ if a car is 1" longer and the rest of the features are the same.  
+
+
+
+**Question**: Are all the $\beta_1$s same in the 3 models above? 
+
+**No**. The effect of `Length` $\beta_1$ depends on the rest of the features in the model!!!! 
+
+
+
+### General linear models
+
+In general, We define a multiple regression as
+
+$$Y = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + \dots + \beta_p x_{ip} + \epsilon_i$$
+
+* Linearity Assumption for this model is 
+
+$$\textbf{E}(y_i | x_i) = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + \dots + \beta_p x_{ip} $$
+
+* The homoscedasticity assumption is
+
+$$\textbf{Var}(y_i | x_{i1}, x_{i2}, \dots, x_{ip}) = \sigma^2$$
+
+* The Error term is iid. and defined as
+
+$$\epsilon_i \overset{iid}{\sim} \mathcal{N}(0, \sigma^2)$$
+
+
+Parameters of interests are all the $\beta's$ and $\sigma^2$.
+
+- Simple interpretations of each $\beta_i's$
+- Simple models for predictions
+
+
+
+### LS Estimates and their properties
+
+These $\beta$ parameters are estimated using the same approach as simple regression, specifically by minimizing the sum of squared residuals ($RSS$): 
+
+$$\min_{\beta_0,\,\beta_1,\,\beta_{2},\dots,\beta_{p}} \sum_{i=1}^{n} (y_i - \beta_0 - \beta_1 x_{i1} - \beta_2 x_{i2} - \dots - \beta_p x_{ip})^{2}$$
+
+To be specific: 
+
+We define let $X$ denote a $n × (p+1)$ matrix whose $(i,j)$th element is $x_{ij}$. That is:
+
+$$X=
+ \begin{pmatrix}
+ 1&  x_{11} & x_{12} & \dots & x_{1p} \\
+ 1&  x_{21} & x_{22} & \dots & x_{1p} \\
+\vdots & \vdots & \vdots & \ddots & \vdots \\
+ 1&   x_{n1} & x_{n2} & \dots & x_{np} 
+ \end{pmatrix}$$ 
+ 
+
+#### OLS Estimates: 
+
+$$\hat\beta = (X^{T}X)^{-1} \cdot X^{T}Y $$
+
+The Variance of these Estimates
+
+$$\textbf{VAR}[\hat\beta | X] = \sigma^{2} (X^{T}X)^{-1}$$
+
+
+#### Residual Sum of Squares (RSS)
+
+For multiple regression, $RSS$ is estimated as:
+
+$$RSS =  \sum_{i=1}^{n} \hat{\epsilon}_i^{2} = \sum_{i=1}^{n} (y_i - \hat\beta_0 - \hat\beta_1 x_{i1} - \hat\beta_2 x_{i2} - \dots - \hat\beta_p x_{ip})^{2}$$
+
+#### Mean Sum of Squares (MSE), Residual Standard Error (RSE)
+
+$\sigma^2$ is estimated by the Mean Sum of Squares (MSE). For multiple regression, MSE is defined as:
+
+$$MSE = \frac{RSS}{n-p-1} \\ 
+\text{where }p =\text{number of predictors used}$$
+
+$\sigma$ is estimated by the Residual Standard Error (RSE). For multiple regression, RSE is defined as:
+
+$$RSE = \sqrt{MSE} = \sqrt{\frac{RSS}{n-p-1}}$$
+
+
+
+Let us compare the three model fits: 
+
+#### Model 1: Simple reg, MPG_City vs. Length 
+
+We first do a simple regression. Let the response $y_i$ be the `MPG_City` and the explanatory variable $x_{i1}$ be `Length` ($i = 1, \dots, n=226$).
+
+
+$$y_i = \beta_0 + \beta_1 \cdot x_{i1} + \epsilon$$
+
+Model assumptions:
+
+1. Linearity: given `Length`, the mean of `MPG_City` is described as $\textbf{E}(y_i | x_i) = \beta_0 + \beta_1 x_i$
+2. Equal variance: the variances of `MPG_City` are the same for any `Length` i.e. $\textbf{Var}(y_i | x_{i1}) = \sigma_{1}^2$
+3. Normality: `MPG_City` is independent and normally distributed. i.e. $\epsilon_i \overset{iid}{\sim} \mathcal{N}(0, \sigma_{1}^2)$
+
+
+
+We now create a model with `lm()`
+```{r eval = T}
+fit1 <- lm(MPG_City ~ Length, data = data1)    # fit model 1
+
+ggplot(data1, aes(x = Length , y = MPG_City)) + 
+  geom_point() +
+  geom_smooth(method="lm",se=F)
+```
+
+Note from the summary below, the $\hat\beta$ for Length is estimated as `r fit1$coefficients[2]`. We say on average MPG drops $.13983$ if a car is $1"$ longer.
+```{r}
+summary(fit1)
+```
+
+
+#### Model 2: Two features Length and Horsepower
+
+Let the response $y_i$ be the `MPG_City` and the explanatory variables be `Length` and `Horsepower` ($i = 1, \dots, n=226$).
+
+
+$$y_i = \beta_0 + \beta_1 \cdot x_{i1} + \beta_2 \cdot x_{i2} + \epsilon$$
+
+
+```{r  eval = T}
+fit2 <- lm(MPG_City ~ Length + Horsepower, data = data1) 
+```
+
+
+A couple quick notes:
+
+1. The order for predictors plays no role.
+2. The output of `lm()` is similar regardless how many predictors are used.
+3. The model assumptions extended automatically here. 
+
+```{r}
+summary(fit2)
+```
+
+
+
+**NOTICE**: Comparing fit2: `Length`+`Horsepower` to fit1: `Length` 
+
+1. The coefficient for `Length` changed to $-0.061651$ from $-0.13983$!!!!
+2. $R^{2}$ is $0.5908$ from $0.266$ - a huge increase. (Never decreasing, why?)
+3. $RSE$ (Residual standard error) is now $2.372$ decreased from $3.175$ (almost never decreasing, why?)
+
+
+The effects of variables ($\beta's$) are defined within the model. They all depend on what else are included or accounted for!
+
+
+#### Model 3:  Several continuous variables
+
+We now add multiple variables to our model:
+
+$$y_i = \beta_0 + \beta_1 x_{i1} + \beta_2x_{i2} + \beta_3x_{i3} + \beta_4x_{i4} + \beta_5x_{i5} + \beta_6x_{i6} + \epsilon$$
+
+
+
+```{r  eval = T}
+fit3 <- lm(MPG_City ~ Length + Horsepower + Width + Seating +
+           Cylinders + Displacement, data = data1)
+```
+
+```{r}
+summary(fit3) 
+```
+
+To summarize, the effects of `Length` from the above three models are
+
+```{r, eval=TRUE}
+data.frame(Model.1 = coef(fit1)[2], Model.2 = coef(fit2)[2], Model.3 = coef(fit3)[2])
+```
+
+* They are different as expected
+* Each one has its own meaning!
+
+
+
+
+
+Based on the output from model 3:
+
+1. $\hat\beta_{Length}$ = `r coef(fit3)[2]` for model 3. Is this estimate wrong?
+2. Inference for each coefficient and for a set of coefficients.
+    + What does each $t$-test do?
+    + What does the $F$-test do here?
+3. Is `Width` **THE** most important variable, `HP` the second, etc?
+4. Can we conclude that none of the `Seating` or `Cylinders` is needed?
+
+
+###Inference 
+
+Given a fixed model, assume all the linear model assumptions are correct we can make the following inferences:
+
+1) For each $\beta$'s: t-intervals and t-tests
+
+2) For a submodel: F-tests (will go through in some details)
+
+3) Confidence intervals for the mean (similar to that in a simple regression)
+
+4) Prediction intervals for an individual subject (similar to that in a simple regression)
+
+
+#### t-tests 
+
+Keep model 3 and `fit3` as an example. What does each $t$-test do? 
+
+```{r eval=T}
+summary(fit3) 
+```
+
+#### F-Tests
+
+We continue to derive a F-test to test a set of $\beta's$ being 0. 
+
+
+We now look at the hypothesis that:
+
+$$H_0: \beta_\text{Seating}=\beta_\text{Cylinder}=0$$
+    
+To be more specific, the $H_0$ is 
+
+**Reduced model:**
+
+$$y_i = \beta_0 + \beta_{\text{Length}} x_{\text{i,Length}} + \beta_{\text{HP}}x_{\text{i,HP}} + \beta_{\text{Width}}x_{\text{i, Width}} + \beta_{\text{Displacement}}x_{\text{i, Displacement}} + \epsilon_i$$
+
+and the $H_1$ is 
+
+**Full model:**
+
+$$y_i = \beta_0 + \beta_{\text{Length}} x_{\text{i,Length}} + \beta_{\text{HP}}x_{\text{i,HP}} + \beta_{\text{Width}}x_{\text{i, Width}} + \\
+ \beta_{\text{Seating}}x_{\text{i, Seating}} + \beta_{\text{Cylinders}}x_{\text{i, Cylinders}} + \beta_{\text{Displacement}}x_{\text{i, Displacement}} + \epsilon_i$$
+
+
+**Theorem**: Assume the linear model assumptions hold, then under the $H_0$
+
+$$F_{\text{stat}}:=\frac{\frac{RSS(H_0)-RSS(H_1)}{df_1}}{\frac{RSS(H_1)}{df_2}} \sim F_{df_1, df_2} \\
+\text{where} \quad {df}_1= \text{# of parameters in } H_1 - \text{# of parameters in } H_0 \\
+\quad {df}_2= \text{# of observations} - \text{# of parameters in } H_1$$
+
+
+##### Use `anava()` to carry out the F-test
+
+We now look at the hypothesis that:
+
+$$H_0: \beta_{Seating}=\beta_{Cylinder}=0$$
+    
+To explore, we can run a model without `Seating` and `Cylinder`.
+```{r}
+fit3.0 <- lm(MPG_City ~ Horsepower + Length + Width + Displacement, data = data1) # under H0
+sum((summary(fit3.0)$residuals)^2) # RSS(H_0)
+sum((summary(fit3)$residuals)^2) # RSS(H_1)
+```
+
+$$F_{\text{stat}}=\frac{\frac{RSS(H_0)-RSS(H_1)}{df_1}}{\frac{RSS(H_1)}{df_2}} = \frac{\frac{923.82 - 907.76}{2}}{\frac{907.76}{219}}=1.9373.$$
+
+Based on the $F$-test given above, the $p$-value is 
+$$P(F_{2,219} > 1.9373)$$
+
+```{r}
+pf(1.9373, 2, 219, lower.tail=F)
+```
+
+$F$-test can be done by `anova(H_0, H_1)`.
+```{r, eval=T}
+fit3.0 <- lm(MPG_City ~ Horsepower + Length + Width + Displacement, data = data1)
+anova(fit3.0, fit3)
+```
+
+**Conclusion:** The p-value being .1466 gives us no evidence to reject the null hypothesis.
+
+
+
+Questions based on the summary for `fit3`
+
+1) What is the $F$ statistics from `summary(fit3)`?
+
+2) Can you perform a $F$-test for each $\beta$ being 0? What is the relationship between the F-test and the t-test?
+
+
+
+#### Confidence Interval for the Mean
+
+Base on Model 3, the mean of `MPG_City` among all cars of length=180, HP=225, width=80, seating=5, cylinders=4, displacement=3.5, transmission="automatic", continent="Am" is
+
+$$\hat{y} = 45.63 + 0.05 \times 180 - 0.02 \times 225 - 0.35 \times 80 - 0.24 \times 5 - 0.27 \times 4 - 0.94 \times 3.5 = 16.17, $$
+with a $\text{standard error}$ = 0.7839001.
+
+We will get the prediction, standard error and the confident intervals by `predict()`.
+
+```{r, eval=T}
+predict(fit3, newcar, interval = "confidence", se.fit = TRUE) 
+```
+
+
+#### Prediction Interval 
+
+Base on Model 3, `MPG_City` for this new design is
+
+$$\hat{y} = 45.63 + 0.05 \times 180 - 0.02 \times 225 - 0.35 \times 80 - 0.24 \times 5 - 0.27 \times 4 - 0.94 \times 3.5 = 16.17$$
+with a 95% prediction interval approximately to be 
+
+$$\hat{y} \pm 2\times RSE = 16.17 \pm 2 \times 2.036.$$
+
+The prediction interval can be obtained by `predict()`.
+
+```{r}
+predict(fit3, newcar,  interval = "predict", se.fit = TRUE) # future prediction intervals
+```
+
+#### Model Diagnoses
+To check the model assumptions are met, we examine the residual plot and the qqplot of the residuals.
+
+We use the first and second plots of `plot(fit)`.
+
+```{r eval=T}
+par(mfrow=c(1,2), mar=c(5,2,4,2), mgp=c(3,0.5,0))
+plot(fit3, 1, pch=16) # residual plot
+abline(h=0, col="blue", lwd=2)
+plot(fit3, 2) # qqplot
+```
+
+Roughly speaking, the linearity, homoscedasticity and normality assumptions are satisfied.
+
+
+\pagebreak
+
+## Categorical Predictors
+
+Let's use `Continent` as one variable. It has three categories. We explore the following questions:
+
+1. Are Asian cars more efficient? 
+2. How does `Continent` affect the `MPG`?
+
+```{r}
+attach(data1)
+levels(Continent)
+```
+
+Model with a categorical variable is same as a "One Way ANOVA"
+
+First, we get the sample means and sample standard error for each group, and plot each
+```{r  eval = T}
+data1 %>%
+group_by(Continent) %>%
+  summarise(
+    mean = mean(MPG_City),
+    sd  = sd(MPG_City)
+  )
+  
+ggplot(data1) + geom_boxplot(aes(x = Continent, y = MPG_City))
+```
+
+
+We use indicator predictors to analyze the effect of `Continent`.
+
+### Model 1 - One Way ANOVA
+
+$$y_{i|x=Am} = \mu_{Am} + \epsilon_i$$
+$$y_{i|x=As} = \mu_{As} + \epsilon_i$$
+$$y_{i|x=E} = \mu_{E} + \epsilon_i$$
+where $\mu_{Am}$, $\mu_{As}$ and $\mu_{E}$ are the mean MPG of each continent, and $\epsilon \sim \mathcal{N}(0,\sigma^2)$. We want to compare the three means and this can be done through linear model with indicator functions.
+
+Let 
+
+* `Am` as the base 
+
+* $x_1$ be the indicator function of being `As` $I(Continent = As)$
+
+* $x_2$ be the indicator function of being `E` $I(Continent = E)$
+
+* $\beta_{Am} = \textbf{E}(MPG|Am)$
+
+* $\beta_{As} = \textbf{E}(MPG|As)-\textbf{E}(MPG|Am)$: the increment between Asia and America
+
+* $\beta_E = \textbf{E}(MPG|E)-\textbf{E}(MPG|Am)$: the increment between Europe and America
+
+Then the above Anova model is same as
+
+$$y_i = \beta_{Am} + \beta_{As} x_{1,i} + \beta_E x_{2,i} + \epsilon_i = \beta_{Am} + \beta_{As} I(Continent = As) + \beta_E I(Continent = E) + \epsilon_i$$
+Now we use `lm()` to fit the model.
+
+```{r eval=T}
+fit.continent = lm(MPG_City ~ Continent, data1)
+summary(fit.continent)
+```
+
+The $F_{test}$ here is to test $H_0: \; \beta_{As} = \beta_{E} = 0$, i.e., there is no difference among the three regions. We reject $H_0$ at $\alpha=0.01$. 
+
+We can also see the coding from here that Am is the base, each coefficient captures the effect of the level vs. Am.
+```{r}
+model.matrix(fit.continent)[5:8, ]
+```
+
+
+To estimate the mean difference between two regions, we can use the package `contrast()`
+
+```{r eval=T, echo=F, error=F}
+library(contrast)
+```
+
+```{r}
+contrast(fit.continent, list(Continent = 'As'), list(Continent = 'Am'))
+contrast(fit.continent, list(Continent = 'As'), list(Continent = 'E'))
+```
+
+
+We can choose the base level as we want. We demonstrate this by setting up Asian cars as the base category:
+
+```{r}
+data1$Continent <- factor(data1$Continent, levels = c("As", "Am", "E"))  
+summary(lm(MPG_City ~ Continent, data1))
+```
+
+Note that:
+
+1. The $F_{test}$ should be the same. 
+2. The coefficients are different but the mean estimates are the same.
+
+```{r}
+data1$Continent <- factor(data1$Continent, levels = c("Am", "As", "E")) 
+```
+
+Remarks: `fit.continent` can also be obtained from
+```{r}
+fit.continent.1 <- lm(MPG_City ~ I(Continent == "As") + I(Continent == "E") , data1)
+summary(fit.continent)    
+model.matrix(fit.continent.1)[1:10, ]
+```
+
+
+We also show a model without intercept $\beta_0$
+```{r}
+fit.continent.2 <- lm(MPG_City ~ 0 + Continent , data1) #
+summary(fit.continent.2)  
+model.matrix(fit.continent.2)[1:10, ]
+```
+
+Drawback of one way Anova: other factors should be also taken into consideration.
+
+
+### Model 2 - Model with Interaction
+Let's take a look at the model which only includes `HP` and `Continent`.
+
+```{r eval=T}
+ggplot(data1, aes(x = Horsepower, y = MPG_City, color = Continent)) + 
+  geom_point() + 
+  geom_smooth(method = "lm" , se =F) + 
+  labs(title = "Model With Interactions")
+```
+As we can see from the plot, Asian cars with smaller HP are more effiecient; while European cars with larger HP are more efficient. So we introduce models with interactions.
+
+Model with interactions: fit $y$ vs $Horsepower$ by $Continent$. 
+
+$$y_{i|Am,\, HP} = \beta_{Am} + \beta_{1_{Am}} \cdot HP + \epsilon_i$$
+$$y_{i|As,\, HP} = \beta_{As} + \beta_{1_{As}} \cdot HP + \epsilon_i$$
+
+$$y_{i|E,\, HP} = \beta_{E} + \beta_{1_{E}} \cdot HP + \epsilon_i$$
+
+This can be done through as follows:
+
+$$MPG= \beta_{Am} + \beta_{As} \cdot I(Continent = As) + \beta_E \cdot I(Continent = E) + \\
+ \beta_{1_{Am}} \cdot HP + \beta_{1_{As}} \cdot HP \cdot I(Continent = As) + \beta_{1_E} \cdot HP \cdot I(Continent = E) + \epsilon$$
+
+
+Similarly, 
+
+* $\beta_{As}$ is the increment of intercept between Asian and American, ... 
+
+* $\beta_{1_{As}}$ is the increment of slope between Asian and American, ...
+
+Use `lm()` with interaction: 
+
+```{r}
+fit.with.interaction <- lm(MPG_City ~ Horsepower*Continent, data1)
+summary(fit.with.interaction)
+```
+
+Question: is the interaction really there? are the effects of HP the same across `Continent`? 
+
+### Model 3 - Model without Interaction
+
+We first plot our models without interactions.
+```{r eval=T}
+fit.no.interation <- lm(MPG_City ~ Continent+Horsepower, data1)
+coefs <- (summary(fit.no.interation))$coefficients[, 1]
+
+ggplot(data1, aes(x = Horsepower, y = MPG_City, color = Continent)) + 
+  geom_point() + 
+  geom_abline(intercept =coefs[1], slope=coefs[4], color ="#F8766D") + 
+  geom_abline(intercept =coefs[1]+coefs[2], slope=coefs[4], color = "#00BA38") +
+  geom_abline(intercept =coefs[1]+coefs[3], slope=coefs[4], color ="#619CFF") +
+  labs(title = "Model Without Interactions")
+```
+
+
+
+For a model without interaction, we assume that the effect of `HP` on `MPG_{City}` is the same regardless of which region the cars are produced.
+
+$$MPG= \beta_{Am} + \beta_{As} \cdot I(Continent = As) + \beta_E \cdot I(Continent = E) + \beta_1 \cdot HP + \epsilon$$
+
+
+
+```{r eval=T}
+fit.no.interation <- lm(MPG_City ~ Horsepower + Continent, data1)
+summary(fit.no.interation)
+```
+
+
+To test there is no interaction is same as to test
+$$H_0: \beta_{1_{AS}} = \beta_{1_E} = 0$$
+which we can do with `anova()`
+```{r}
+anova(fit.no.interation, fit.with.interaction)
+```
+
+
+We do reject the null hypothesis with a $p$-value to be $.0013$, not terribly small. That indicates some interaction effect of HP and Continent.
+
+
+To test whether `Continent` is significant in this model, we can use `anova(H_0, H_1)`. Alternativaly, we can use `Anova()` from the car package.
+
+```{r}
+Anova(fit.no.interation)
+```
+
+We fail to reject $H_0$ at $\alpha=0.01$, i.e., controlling HP, we do not have the evidence to say the effect of `Continent` is different.
+
+\pagebreak
+
+
+## More about Multiple Regression
+
+We now try a model which includes all variables (sensible ones!!!!!)
+
+```{r}
+names.exclude <- names(data1) %in% c("Make.Model", "MPG_Hwy", "Make")
+# names.exclude <- c("Make.Model", "MPG_Hwy", "Make") # doesn't work.
+data2 <- data1[!names.exclude]  # Take a subset with all var's but "Make.Model","MPG_Hwy","Make"
+names(data2)
+```
+
+
+Or use `dplyr`!!!!!!
+
+```{r  eval = T}
+data2 <- select(data1, -Make.Model, -MPG_Hwy, -Make)  #how convenient!!!
+names(data2)
+```
+
+**QUESTION**: What would have happened if you have added Make.Model into the model???
+
+```{r  eval = T}
+fit.all <- lm(MPG_City ~., data2)
+```
+
+```{r}
+summary(fit.all)
+```
+
+
+
+The $t$-table is pretty messy, many variables are not significant, need to do `Anova()`
+
+```{r}
+Anova(fit.all)
+```
+
+
+
+Comments:
+
+1. `Continent` is not needed after accounting for all other variables. That says we don't have evidence to show that one continent tends to produce more efficient cars than the others.
+2. Can we drop all the variables with $p$-values larger than $.05$???????
+3. Take a look at `Transmission`. There are predominately automatic cars. Perhaps we should only include automatic cars and change our population. 
+```{r}
+table(data2$Transmission)
+```
+4. We don't have to use a model with all $p$-valueless being small!
+
+
+
+**Model diagnostic**: check if three assumptions of linear models are met.
+
+Residuals vs Fitted and qqnormal Plot, both plots look fine.
+```{r  eval = T}
+par(mfrow=c(1,2))
+plot(fit.all, 1) 
+plot(fit.all, 2) 
+```
+
+
+We now do a Confidence Interval for the mean of cars like our `newcar`
+```{r}
+fit.mean.new <- predict(fit.all, newcar, interval = "confidence") 
+fit.mean.new
+```
+
+
+We also do a prediction interval on this `newcar`
+```{r}
+fit.new <- predict(fit.all, newcar, interval = "prediction", se.fit=TRUE)
+fit.new$fit
+fit.new$se.fit
+fit.new$residual.scale
+```
+
+## Summary
+
+Summary about linear models:
+
+   1. linear model is simple and has nice interpretation
+   
+   2. Coefficient for each predictor depends on the model
+    
+   3. LS automatically adjusts the unit of predictors
+   
+   4. $t$-tests: the effect of each coeff. (Does not rank the importance of the predictors)
+    
+   5. $F$-tests: test a set of predictors (t-tests being special cases!)
+   
+   6. Model assumptions: all in residuals 
+
+### BIGGEST QUESTION: How to identify a set of important variables or Which model to use?????
+
+Choose models with small "prediction errors"!!!! Next Lecture..
+
+\pagebreak
+
+## Appendices
+###    Appendix 1: Clean dataset Cars_04 > car_04_relular.csv
+
+```{r eval=F}
+# Caution: you need to have Cars_04.csv in order to run this chunk!!!!!
+data = read.csv("Cars_04.csv", header=T, as.is=F)
+str(data)   # There are 242 cars in the data
+data.comp <- na.omit(data)  # It deletes any car with a missing value - not a good idea.
+str(data.comp)  #182 cars with complete records for all the variables. 
+
+### Explore the data
+names(data)
+head(data)
+summary(data)
+
+par(mgp=c(1.8,.5,0), mar=c(3,3,2,1)) 
+hist(data$Horsepower, breaks=20, col="blue")  # notice that there are some super powerful cars
+
+### Let's find out which are the super powerful cars
+data$Make.Model[data$Horsepower > 400] # Show models with Horsepower > 400
+data$Make.Model[data$Horsepower > 390]
+data$Make.Model[data$Horsepower <= 100]
+
+### We could find cars with horsepower > 400
+data[data$Horsepower > 400, "Make.Model"] 
+
+### Let's concentrate on  "regular" cars and exclude those super expensive ones 
+datacar <- data[(data$Horsepower <=390) & (data$Horsepower > 100), ]
+
+### Take a subset with relevant variables
+variables <-  c("Make.Model", "Continent", "MPG_City", "MPG_Hwy",
+              "Horsepower","Weight","Length", "Width",
+              "Seating","Cylinders","Displacement",
+              "Make", "Transmission")
+
+data1 <- datacar[, variables]  # subset
+str(data1)
+write.csv(data1, file="car_04_regular.csv", row.names = FALSE)
+                            # Output the data and name it car_04_regular.csv
+
+```
+
+
+###    Appendix 2: Using formulae to obtain LS estimates
+
+Take `fit3` and recreate $\hat\beta$'s. 
+```{r}
+design.x <-  model.matrix(fit3)  #fit3$model gives us Y and x1 x2...xp 
+y <- fit3$model[, 1]
+design.x[, 1]
+rse <- (summary(fit3))$sigma
+beta <-  (solve( t(design.x) %*% design.x)) %*% t(design.x) %*% y # reconstruct LS estimates
+beta
+
+```
+
+Reconstructing the Co variance matrix from `fit3`
+```{r}
+summary(fit3)$cov.unscaled   # inverse (X' X)
+cov.beta <- (rse^2) * (summary(fit3)$cov.unscaled)  # alternatively we can get the cov matrix this way
+```
+
+
+Calculating the Standard Error from `fit3`
+```{r}
+sd.beta <- sqrt(diag(cov.beta)) # check to see this agrees with the sd for each betahat
+sd.beta  # this shoulbe be same as the Std. Error in the summary table
+
+summary(fit3)$coeff[, "Std. Error" ]
+```
+
+
+
+###    Appendix 3: Nonlinearity in predictors: transformations
+
+The $x$ variable may relate to $y$ through a function of $x$, say $log(x)$ or $x^{2}$. 
+
+  * We can handle this by transforming $x$.
+  * First let's find out if there is some non-linear relationship there by looking at pairwise scatter plots
+
+
+Based on the following `Horsepower` may need a transformation
+```{r eval=T}
+pairs(data1[, -1]) 
+```
+
+
+We look at `Horsepower` vs. $\frac{1}{Horsepower}$
+```{r message = F, eval=T}
+par(mfrow=c(1,2))
+plot(data1$Horsepower, data1$MPG_City, pch=16) 
+plot(1/data1$Horsepower, data1$MPG_City, pch=16)  #looks better!
+```
+
+
+$\frac{1}{Horsepower}$ Looks good, so we make a model using that.
+```{r}
+fit.transform <- lm(MPG_City~ I(1/Horsepower), data1)  # Use I()
+plot(fit.transform, 1)
+```
+
+We also try to fit $Horsepower^{2}$
+```{r}
+fit12 <- lm(MPG_City ~ Horsepower + I(Horsepower^2), data1) # fit a quadratic function
+summary(fit12)
+plot(fit12$fitted, fit12$residuals, pch=16)
+abline(h=0, lwd=4, col="red")
+plot(fit12, 2)
+```
+
+
+
+
+
+
+###    Appendix 4: Model Diagnoses via a perfect linear model scenario
+
+We look to fit a model containing 100 points of the equation 
+
+$$y = 1 +2x + \mathcal{N}(0,2) \quad i.e. \quad \beta_0 = 1 ,\beta_1 = 2, \sigma^2 = 2.$$
+
+```{r}
+par(mfrow=c(1,1))
+
+x <- runif(100)
+y <- 1+2*x+rnorm(100,0, 2)
+fit <- lm(y~x)
+fit.perfect <- summary(lm(y~x))
+rsquared <- round(fit.perfect$r.squared,2)
+hat_beta_0 <- round(fit.perfect$coefficients[1], 2)
+hat_beta_1 <- round(fit.perfect$coefficients[2], 2)
+plot(x, y, pch=16, 
+     ylim=c(-8,8),
+     xlab="a perfect linear model: true mean: y=1+2x in blue, LS in red",
+     main=paste("R squared= ",rsquared, 
+                ", LS estimates b1=",hat_beta_1, "and b0=", hat_beta_0))
+abline(fit, lwd=4, col="red")
+lines(x, 1+2*x, lwd=4, col="blue")
+```
+
+
+Residual plot
+```{r}
+plot(fit$fitted, fit$residuals, pch=16,
+     ylim=c(-8, 8),
+     main="residual plot")
+abline(h=0, lwd=4, col="red")
+```
+
+
+
+
+Check normality
+```{r}
+qqnorm(fit$residuals, ylim=c(-8, 8))
+qqline(fit$residuals, lwd=4, col="blue")
+```
+
+
+
+
+
+The following example tells us we can't look at y directly to check the normality assumption. Why not? We really need to examine residuals!
+
+```{r}
+par(mfrow=c(2,2))
+x <- runif(1000)
+y <- 1+20*x+rnorm(1000,0, 2)
+plot(x, y, pch=16)
+hist(y, breaks=40)
+qqnorm(y, main="qqnorm for y")
+qqline(y)
+fit <- lm(y~x)
+qqnorm(fit$residuals, main="qqnorm for residuals")
+qqline(fit$residuals)
+par(mfrow=c(1,1))
+
+data.frame( mean = mean(y), std.dev = sd(y))
+```
+
+
+### Appendix 5: Colinearity
+
+When some $x$'s are highly correlated we can't separate the effect. But it is still fine for the purpose of prediction.
+
+A simulation to illustrate some consequences of colinearity. Each $p$-value for $x_1$ and $x_2$ is large but the null of both $\beta's = 0$ are rejected....  Because $x_1$ and $x_2$ are highly correlated.
+
+```{r}
+par(mfrow=c(2,1))
+x1 <- runif(100)
+x2 <- 2*x1+rnorm(100, 0,.1)    # x1 and x2 are highly correlated
+y <- 1+2*x1+rnorm(100,0, .7)   # model
+newdata.cor <- cbind(y, x1,x2) # to see the strong correlations..
+pairs(newdata.cor, pch=16)
+```
+
+$x_1$ is a useful predictor
+```{r}
+summary(lm(y~x1)) 
+```
+
+$x_2$ is a useful predictor
+```{r}
+summary(lm(y~x2))
+```
+
+$x_1$ and $x_2$ together show that one is not
+```{r}
+summary(lm(y~x1+x2)) 
+```
+
+Putting both highly correlated var's together we can't separate the effect of each one, though the model is still useful!
+```{r}
+data.frame(Corealation = cor(x1, x2))
+```
+
+###    Appendix 6: F distribution
+A quick look at an $F$ distribution. One may change $df_1 = 4$ and $df_2=221$ to see the changes in the distribution.
+```{r  eval = T}
+### 
+hist(rf(10000, 6, 226-7), freq=FALSE, breaks=200)   # pretty skewed to the right
+
+Fstat=(summary(fit3))$fstat    # The Fstat, df1, df2
+pvalue=1-pf(Fstat[1], 6, 219) #or pf(Fstat[1], 6, 219, lower.tail=FALSE)
+
+ # As long as Fstat is larger than 2.14, we reject the null at .05 level.
+data.frame(F_stat = Fstat[1] , pvalue = pvalue , Cutoff = qf(.95, 6, 219))
+```
+
+###    Appendix 7: Model selection (little bit)
+
+We may use a model selection scheme to choose some candidates: Details will be given in the next lecture
+
+```{r eval=F}
+library(leaps)
+fit.t1 <- regsubsets(MPG_City~., data2, method="exh")
+fit.t2 <- summary(fit.t1)
+names(fit.t2)
+fit.t2
+fit.t3 <- lm(MPG_City~., data2[fit.t2$which[5, ]])
+summary(fit.t3)
+Anova(fit.t3)
+
+summary(lm(MPG_City~., data2))
+regsubsets(MPG_City~., nvmax = 15, force.in = 4, data2, method="exh")
+summary(regsubsets(MPG_City~., nvmax = 15, force.in = 4, data2, method="exh")) 
+```
+
+
