@@ -1,0 +1,427 @@
+---
+title: "Intro to R"
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  pdf_document: default
+date: "Fall 2017"
+subtitle: 'STAT 471/571/701: Modern Data Mining'
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(fig.height=5, fig.width=11, warning = F)
+```
+
+```{r echo = F, message=FALSE, warning=FALSE, echo=F}
+# Initial code block to install curl if not already
+if(!require('curl')) {
+  install.packages('curl')
+}
+
+# Initial code block to check if data is in working directory.
+if(!file.exists("Survey_results_final.csv") ||
+   !file.exists("tips.txt")) {
+  err_str <- paste("You're missing the data files. Download them and put them into the folder with this Rmd file:", getwd())
+  stop(err_str)
+}
+```
+
+# Welcome!
+
+This tutorial is designed to get you up and running with R as quickly as possible. If you have any questions, come to office hours (listed on Canvas), or ask questions on [Piazza](https://piazza.com/upenn/spring2017/stat471).
+
+# Step 0: Install all the things!
+
+First, we need to install 'base R.' Different download mediums are available on [CRAN](https://cloud.r-project.org/); pick the correct one for your computer. I strongly advise updating to the most up to date version of R, which is R 3.4.1 as of 30 June 2017. If you are familiar with command line package managers, e.g. `brew`, feel free to use those toolchains.
+
+Base R comes with a passable 'graphical user interface' (GUI). Because R is an [interpreted programming language](https://en.wikipedia.org/wiki/Interpreted_language), you can write R using any text editor. However, we strongly recommend using RStudio, an excellent [interface](https://en.wikipedia.org/wiki/Integrated_development_environment) for coding in R.
+
+Rstudio integrates the command line, graphical file directory explorer, graphical environment/variable inspector, and figure/plot output. It also has first-class support for RMarkdown, which will come in very handy for your assignments.
+
+You can install Rstudio freely from [their website](https://www.rstudio.com/products/rstudio/download3/) - download the personal desktop version. If you are feeling adventurous, can tolerate crashes, and won't complain to the teaching staff, you can try the Rstudio nightly build for many improvements.
+
+After installing, go to the console (it should start with `R version 3.4.1 (2017-06-30) -- "Single Candle"`), and type `sessionInfo()` and hit enter. Boom!
+
+# Step 1: Creating a Rmarkdown document
+
+After opening up RStudio you will want to open a new R Markdown document by going to `File > New File > R Markdown`, or selecting `R Markdown` from selecting the top-left dragdown in RStudio. You will likely be asked to install a number of packages - do that. If the install fails (permission issues), you can try the following:
+
+```{r, eval = F}
+install.packages("rmarkdown")
+install.packages("knitr")
+```
+
+An R code file is fundamentally a list of commands to be executed. You can write code directly in the console area, but it is preferable to use the R Scripting area to visualize and keep track of your commands. This is especially important for complicated analyses that you wish to reproduce or share.
+
+R Markdown files are perfect for reproducing and sharing data analysis. Each file is broken down into text chunks which are lightly formatted using [Markdown](https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet), and code chunks which run R code. The results are shared linearly, so each code chunk remembers what the result of previous chunks was. A cheat sheet provided by RStudio can be found [here](https://www.rstudio.com/wp-content/uploads/2015/02/rmarkdown-cheatsheet.pdf).
+
+Code chunks look like the following:
+
+```{r, echo=FALSE}
+cat("```{r}
+# code goes here
+```")
+```
+
+Three backticks indicate that the block is a code block, and `{r}` indicates that the code is in the R language. You can choose to show/hide codes by specifying `echo=TRUE`/`echo=FALSE`, and to show nothing but only run the codes by `include=FALSE`. [More options](https://yihui.name/knitr/options/) are available. You can also click on the setting (the little gear at the topright corner of each chunk) to check options.
+
+This file itself is a R Markdown file! You might be reading it as a PDF document or as a Word document. RStudio (technically, the `knitr` R package) builds and can save documents in a number of different formats. You may need to install [Pandoc](http://pandoc.org/) for exporting to PDF or Word, but exporting to HTML should pretty much always work. The Wharton lab computers should work.
+
+There is a button at the top of RStudio, that should read 'Knit [format]' - clicking it will knit this document in that format. Try it out!
+
+For more help with Rmarkdown, check out Hadley's [writeup](http://r4ds.had.co.nz/r-markdown.html) or this [cheatsheet](https://www.rstudio.com/wp-content/uploads/2015/02/rmarkdown-cheatsheet.pdf). For time and brevity, we cannot cover everything about it. You can also examine the source of this Rmd file to understand how these files are laid out. Additionally, our homework files will be presented in Rmd to examine as well.
+
+# Step 2: Writing R code
+
+At its most basic, R can be used as a calculator. The following code block shows a super simple operation.
+
+```{r}
+(39 + 14) / 7
+```
+
+You can assign values to variable names with the 'left arrow' operator, `<-`, and then access them with that name.
+
+```{r}
+x <- pi
+x
+```
+
+In RStudio, you can use <kbd>alt</kbd> + <kbd>-</kbd> to create the arrow operator. Do not use the 'equals' sign assignment!
+
+There is, of course, far more to R code than just this. More complex projects include packages to [write books](https://github.com/rstudio/bookdown), serve [interactive data applications](http://shiny.rstudio.com)([examples](http://shiny.rstudio.com/gallery/)), or 'just' do [machine learning](https://cran.rstudio.com/web/views/MachineLearning.html). 
+
+R packages can also take advantage of [C++ integration](https://github.com/RcppCore/Rcpp), 
+(example: [RPresto](https://github.com/prestodb/RPresto/blob/master/src/transpose.cpp)), or integrate tightly with the [command line](https://stat.ethz.ch/R-manual/R-devel/library/base/html/system.html) or [system processes](https://github.com/gaborcsardi/processx).
+
+There's even packages to [mansplain](https://github.com/hilaryparker/mansplainr) the code :)
+
+### Working with the console
+
+You can evaluate code in your file in several ways:
+
+* Evaluate current line: <kbd>cmd</kbd>+<kbd>ret</kbd>
+* Evaluate selection: select code block and use the above keystroke combo
+* Evaluate entire script: <kbd>opt/alt</kbd>+<kbd>cmd</kbd>+<kbd>R</kbd>
+* Evaluate code chunk: <kbd>cmd</kbd>+<kbd>shift</kbd>+<kbd>enter</kbd>
+
+Here are a few more nice key shortcuts:
+
+* Move cursor to script editor: <kbd>ctrl</kbd> + <kbd>1</kbd>
+* Move cursor to console editor: <kbd>ctrl</kbd> + <kbd>2</kbd>
+* Clear the console: <kbd>ctrl</kbd> + <kbd>L</kbd>
+
+RStudio has many helpful shortcuts and tooling - check their [Shortcut cheatsheet](https://support.rstudio.com/hc/en-us/articles/200711853-Keyboard-Shortcuts) and their [Tip Twitter](https://twitter.com/rstudiotips) for more.
+
+
+### Help 
+Getting help is pretty straightforward in R. Here are a few ways to get help on the function we just saw. The first three commands don't output anything to your command line but open up a help file in the help viewer.
+
+Three key ways to look up help pages:
+
+```{r, eval = F}
+?read.csv
+help(read.csv)
+apropos("read")	#	List all the functions with "read" as part of the function. Very useful!
+```
+
+Google is your best friend! If you pair "R" with some phrase related to statistics or data google usually does a good job, e.g. "R how to read csv files" or "R plot histogram". [Stack Overflow](https://stackoverflow.com/questions/tagged/r) has lots of questions that you might bump into. Developers of packages answer questions on Stack Overflow too, including Hadley Wickham (author of `ggplot`, `dplyr`, etc.) and Dirk Eddelbuettel (author of `Rcpp`)!
+
+If you're having trouble importing data, RStudio makes reading data easy with `Environment tab > Import Dataset`.
+
+
+### Packages
+
+R is an open source statistical language, which facilitates contributors to write "packages" with supplemental functions to apply the algorithms we learn about in class to actual data! The vast amount of packages for R is one of its biggest strengths. As of 25 August 2017 there are 11288 available packages on CRAN, the Comprehensive R Archive Network.  
+
+One of the best ways to explore the packages available for R is through the [Task Views](https://cran.r-project.org/web/views/) page, describing the packages available in R. We will be using many statistical and machine learning algorithms, plotting functions, and datasets that are not available in the base distribution of R. 
+
+The following code explains a few of the core package operations.
+
+```{r,eval=FALSE}
+install.packages("MASS")      # Install MASS from CRAN
+library("MASS")               # Load package MASS
+help(package = "MASS")        # Get information about MASS
+vignette(package = "dplyr")   # Read vignettes about dplyr
+detach("package:MASS",        # Detach package
+       unload=TRUE)
+```
+
+
+### Setting your working directory
+
+Your working directory is where R will find and save data files, plots, etc. We recommend making a folder in your Dropbox directory for this class and its assorted files (see appendix).
+
+```{r}
+getwd()  
+```
+
+You can set your working directory with `setwd(path)`. Make sure you always check working directory before reading data! This is especially important if you are working on various analyses that assume different working directories.
+
+```{r, eval = F}
+# d <- "/Users/lzhao/Dropbox/Stat471/Canvas_Spring_2016/R Tutorial/R_tutorial"
+# setwd(d)
+```
+
+
+# Step 3: Reading Data
+
+The data for the rest of this section is in the Data folder in Canvas (Courses > Stat 471 > Files > Data). Download both of these files (`Survey_results_final.csv` and `tips.txt`) and put them in your working directory.
+
+Here's an example of how to read in a `.csv` data file located in your working directory, using the `read.csv` function in R:
+
+```{r, eval = T}
+radio <- read.csv("Survey_results_final.csv", header = TRUE,
+                  stringsAsFactors = F)
+```
+
+The most important thing to note is the path to the file. If you set your working directory correctly, and the file is in the working directory, this will work. You can also use a direct path, e.g. <code> `r file.path(getwd(), "Survey_results_final.csv")`</code>.  Alternatively, you can use direct urls to content on the internet, and R will open the connection to download the file.
+
+This example downloads some county level wdatan from the internet, parses the data as a table, and then returns the first 6 rows.
+
+```{r}
+ff <- "https://cdn.rawgit.com/Keno/8573181/raw/7e97f56f521d1f49b966e04457687e87da1b062b/gistfile1.txt"
+ff_example <- read.csv(curl::curl(ff), stringsAsFactors = F)
+head(ff_example, 10)
+```
+
+You can add additional parameters to customize the import process. Use `?read.csv` to see the available options (or type `read.csv(` and hit tab in Rstudio).
+
+# Step 4: Cleaning and examining the data
+
+Before you conduct your analysis it is always wise to take a quick look at the data and try to spot anything abnormal such as missing data.
+
+In R, data is usually stored in an object called a 'data frame'. Each row is an observation and each column is a variable/feature. 
+
+```{r}
+class(radio)
+```
+
+As noted above, you can type `radio` into console and get the full representation of the object. However, this won't  display nicely when there are a lot of columns. We often examine the structure, head, or tail of the data to get a feel for it.
+
+```{r, eval=F}
+str(radio)
+head(radio)
+tail(radio)
+ncol(radio)
+```
+
+You can also check the dimensions of the dataset with `dim()`. Other useful functions include `length()`, `nrow()`, `ncol()`. Variable names are accessed with `names()` function.
+
+In Rstudio, you can also go to the Environment panel, and click on a particular object to open a visual representation of the object. You can also access that with `View()` (capital V). 
+
+You can subset with brackets. `names(radio)` returns a list, and to access the first object of the list you do `names(radio)[1]`.  
+
+```{r}
+names(radio)[1] <- "hit_id"
+names(radio)[1:10]
+```
+
+# Step 5: Regression primer
+
+The `lm()` command stands for linear model and allows you to run regressions. Here we'll run a quick analysis of the relationship between tipping behavior and total bill size.
+
+```{r}
+tips <- read.csv("tips.txt", stringsAsFactors = T)
+str(tips)
+```
+
+Run some of these commands to explore the dataset.
+```{r, eval = F}
+dim(tips)      # the size of the data
+head(tips)     # look at the first few entries
+head(tips, 10) # look at the first ten entries
+tail(tips)
+names(tips)    # see the name of the columns
+summary(tips)  # get a simple summary of each variable
+```
+
+It's easy to create a new variable as a function of other variables. Here, `tips$tip` denotes the tip column in the tips data and `tips$total_bill` denotes the `total_bill` column.
+
+```{r}
+tips$percent <- 100*tips$tip/tips$total_bill # create a new variable
+str(tips)
+```
+
+# Step 6: Plotting
+
+Here are some basic but important plotting functions that come with the base distribution of R. For the most part, this is all you'll need give or take a few other plot types (i.e. `qqplot()`, `qqline()`, `abline()`).
+
+Often base R `plot()` returns a passable graphical representation. The rest of this section details a few options you can set to create different graphics. R has amazing graphical capability; in particular, `ggplot2` is a great package to use for plotting and graphics.
+
+```{r}
+plot(tips$total_bill,tips$percent)
+```
+
+The same plot with some bells and whistles. This is included to show the capabilities of base R graphics, but I would strongly recommend using ggplot2 instead if you want to make serious, involved graphics.
+```{r}
+plot(tips$total_bill, tips$percent, 
+     main = "Total Bill v. Percent Tip", # give plot a title
+     ylab = "Percent",    # label the y-axis
+     xlab = "Total Bill", # label the x-axis
+     pch = 16,            # change the type of plot point
+     col = "red",         # set the color of plot point
+     lwd = 2,             # set the line width
+     xlim = c(0,60),      # change limits of x-axis
+     ylim = c(0,50))      # change the limits of y-axis
+```
+
+A simple linear regression 
+```{r,results="hide"}
+model <- lm(percent ~ total_bill -1 , data = tips) # save your regression as an object
+model # show modelling results
+summary(model) # show more detailed results
+
+# plotting the results
+plot(tips$total_bill, tips$percent, 
+     main = "Total Bill v. Percent Tip", # give plot a title
+     xlab = "Percent",    # label the x-axis
+     ylab = "Total Bill", # label the y-axis
+     pch = 16,            # change the type of plot point
+     col = "red",         # set the color of plot point
+     lwd = 2,             # set the line width
+     xlim = c(0,60),      # change limits of x-axis
+     ylim = c(0,50))      # change the limits of y-axis
+abline(model) # add best fit line
+```
+
+
+# Step 7+: Getting comfortable
+
+### Writing good code
+
+The most important guideline in writing code is to keep it simple. 
+
+Hadley's [R style guide](http://adv-r.had.co.nz/Style.html) is excellent and valuable for writing readable, meaningful, and sharable code in R. We will not enforce adherence to these guidelines, but it is definitely worth reading through to understand their techniques and reasoning. Google's [R style guide](https://google.github.io/styleguide/Rguide.xml) is a bit more comprehensive but also older; there are no bad ideas in here, but a few outdated or possibly internal quirks that I disagree with.
+
+
+# Appendix
+
+### Basic operations
+You can perform basic math, vector algebra, etc. using R. In fact, these basic commands are the building blocks of many of the sophisticated methods you will learn later in the course.
+
+### Functions
+
+R is all about functions.  There are many built in functions and you can even define your own. Here are some familar ones:
+```{r, eval = F}
+1 + 1
+exp(2)
+pi
+log(3) # this is the NATURAL log not base 10.
+cos(2)
+```
+
+Here's a simple function definition:
+
+```{r}
+square <- function(x) {
+  return(x^2)
+}
+
+square(12)
+
+```
+
+### Subsetting and accessing data
+
+This is hard. Recall the tips set.
+
+```{r}
+head(tips)
+```
+
+Then, we can get a column, if we know the name of the column, using the `$` operator:
+
+```{r}
+head(tips$percent, 2)
+```
+
+Data frames are matrix-like in R. You can access a particular cell using location indices:
+
+```{r}
+# 4th row, 8th column ('percent')
+tips[4, 8]
+```
+
+To get a full row or column, leave the other blank
+
+```{r}
+tips[4,] # 4th row/observation
+```
+
+```{r}
+head(tips[,8], 2)  # 8th column
+```
+
+### Variables
+We can assign values to variables in our workspace. 
+```{r, eval = F}
+x <- 1 # assign a value to x
+x      # print the value of x
+y <- pi
+z <- -10
+ls()            # see what variables are stored in your workspace
+rm(x)           # remove x from your workspace
+# x 
+# what will happen
+ls()
+rm(list = ls()) # remove everything in your workspace (very handy trick)
+# y 
+# what will happen
+```
+
+### Vectors and Vector Arithmetic
+The `c()` function "collects" variables of the same class. We use it to collect numbers into a vector.
+```{r, eval = F}
+x <- c(1,2,3,4,5) # variables can store collections of numbers
+y <- 11:15  # use ":" as a quick way to write sequence of numbers
+z <- c(x,y) # glue two vectors together
+
+length(x)   # find the length of x
+sum(x)      # find the sum of elements in x
+max(x)      # find the maximum value, ...
+min(x)
+mean(x)
+sd(x)
+summary(x)
+
+x[1] <- 100 # change the value at a location
+x
+
+y[c(2,3)] <- c(1,1) # change the value at multiple locations
+y
+
+z <- x+y # math is done "component wise"
+z
+
+x*y   # element by element multiplication
+sqrt(x) # even "scalar" functions operate on vectors
+```
+
+### Version Control
+
+You should store your files under some form of [version control](https://en.wikipedia.org/wiki/Version_control). Doing so allows you to view your file history and restore your files in case your hard drive dies or you make a mistake.
+
+If you are familiar with Git, I would recommend creating a private repo on Github or Bitbucket. Otherwise, it's perfectly reasonable to put your working directory in your Dropbox account. 
+
+### Further reading
+
+For further study, we highly recommend studying the 'Tidy-verse', or a collection of R libraries and paradigms that encourage the use of [tidy data](http://vita.had.co.nz/papers/tidy-data.html). For an introduction, check out this [vignette](https://cran.r-project.org/web/packages/tidyr/vignettes/tidy-data.html).
+
+[Hadley's](http://github.com/hadley) new book, [R for Data Science](http://r4ds.had.co.nz/) is a phenomenal resource for understanding the modern data science workflow. 
+
+[Airbnb uses R extensively](https://medium.com/airbnb-engineering/using-r-packages-and-education-to-scale-data-science-at-airbnb-906faa58e12d#.x1jvmiotl) internally and wrote about that experience. Shameless self promotion - I rewrote nearly everything that Ricardo talks about :)
+
+Some more R references:
+
+* For more detail about writing functions: [link](http://en.wikibooks.org/wiki/R_Programming/Working_with_functions)
+* An advanced reference for those who have used R before or for those who are programmatically inclined: [link](http://adv-r.had.co.nz/)
+* An excellent reference for the powerful and easy to use graphics package ggplot2 for more complex graphics: [link](http://www.ceb-institute.org/bbs/wp-content/uploads/2011/09/handout_ggplot2.pdf)
+* StitchFix has a good recommended data science reading list: [link](http://multithreaded.stitchfix.com/blog/2016/06/09/ds-books/)
+* An aggregator of R blogs (with beginner to expert tips): [R-bloggers](http://www.r-bloggers.com/)
