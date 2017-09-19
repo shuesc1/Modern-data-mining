@@ -1,0 +1,491 @@
+---
+title: "STAT 471/571/701 Modern Data Mining - HW 1"
+author:
+- Antina Lee
+- Joseph Haymaker
+- Maria Diaz Ortiz
+date: 'Due: September 17, 2017'
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.height=5, fig.width=11, warning = F)
+library(dplyr)
+library(ggplot2)
+library(car)
+library(ISLR)
+
+# constants for homework assignments
+hw_num <- 1
+hw_due_date <- "September 17, 2017"
+```
+
+## Overview / Instructions
+
+**All the works submitted should be done through r markdown format.** Find RMarkdown cheat sheet [here](https://www.rstudio.com/wp-content/uploads/2015/02/rmarkdown-cheatsheet.pdf). For those who have never used it before we urge you to start this homework as soon as possible. 
+
+This is homework #`r paste(hw_num)` of STAT 471/571/701. It will be *due on `r paste(hw_due_date)` by 11:59 PM* on Canvas. You can directly edit this file to add your answers. **Submit a zip file containing the Rmd file, a PDF or HTML version, and all data files necessary with only 1 submission per HW team**. If you intend to work on separate problems separately, compile your answers into 1 Rmd file before submitting. Additionally, ensure that you can 'knit' or compile your Rmd file. It is also likely that you need to configure Rstudio to properly convert files to PDF. [**These instructions**](http://kbroman.org/knitr_knutshell/pages/latex.html#converting-knitrlatex-to-pdf) should be helpful.
+
+In general, be as concise as possible while giving a fully complete answer. All necessary data is available in the `Data` folder on Canvas. Make sure to document your code so the teaching fellows can follow along. R Markdown is particularly useful because it follows a 'stream of consciousness' approach: as you write code in a code chunk, make sure to explain what you are doing outside of the chunk. 
+
+Remember that the [Code of Academic Integrity](http://www.upenn.edu/academicintegrity/ai_codeofacademicintegrity.html) strictly applies to this course. Any questions you have on the homework should be directed to [Piazza](https://piazza.com/upenn/fall2017/stat471/). If you have questions that would reveal part of the solution, ask them in 'private to instructors' mode. 
+
+Solutions will be posted after the deadline. Make sure to compare your answers to and understand the solutions.
+
+## Question 0
+
+Review the code and concepts covered during lecture. 
+
+# EDA
+
+## Question 1: Exploratory Data Analysis with Sirius XM
+
+This question is about estimating audience size and is designed as a tutorial on the data exploration process of data cleaning, data summary and data visualization. No formal statistical inference is necessary for this question. First time R users may want to defer or skip this question.
+
+*Background:* Wharton launched a talk show called "Business Radio Powered by the Wharton School" through the Sirius Radio station in January of 2014. Within a short period of time the general reaction had been overwhelmingly positive. To find out the audience size for the show, we designed a survey and collected a data set via MTURK in May of 2014. Our goal was to estimate the audience size. There were 51.6 million Sirius Radio listeners then. One approach is to estimate the proportion of the Wharton listeners to that of the Sirius listeners, $p$, so that we will come up with an audience size estimate of approximately 51.6 times $p$. 
+
+To do so, a simple survey was launched via Amazon Mechanical Turk (MTurk) on May 24, 2014 and we set it to be run for 6 days with a target maximum sample size of 2000 as our goal. Most of the observations came in within the first two days. The main questions of interest are "Have you ever listened to Sirius Radio" and "Have you ever listened to Sirius Business Radio by Wharton?". A few demographic features used as control variables were also collected; these include Gender, Age and Household Income.  
+
+We requested that only people in United States answer the questions. Each person can only fill in the questionnaire once to avoid duplicates. Aside from these restrictions, we opened the survey to everyone in MTurk with a hope that the sample would be more randomly chosen. 
+
+The raw data is stored as `Survey_results_final.csv` on Canvas.
+
+### Q1.1
+
+Load the data into R. 
+
+```{r}
+
+radio <- read.csv("Survey_results_final.csv", header=T)
+
+```
+
+For each of the following 2 questions, there is a `dplyr` solution and a `base` R solution. Provide *both* ways of doing so. 
+
+**i. We need to clean and select only the variables of interest. Select only the variables Age, Gender, Education Level, Household Income in 2013, Sirius Listener?, Wharton Listener? and Time used to finish the survey.**
+
+```{r}
+#base R
+radio2 <- data.frame(radio$Answer.Age, radio$Answer.Gender, radio$Answer.Education, radio$Answer.HouseHoldIncome, radio$Answer.Sirius.Radio, radio$Answer.Wharton.Radio, radio$WorkTimeInSeconds)
+
+#dplyr
+radio3 <- radio %>% select(28, 30, 29, 31, 32, 33, 24)
+names(radio)
+```
+
+**ii. Change the variable names to be "age", "gender", "education", "income", "sirius", "wharton", "worktime".**
+
+```{r}
+#base R
+names(radio2)[1:7] <- c("age", "gender", "education", "income", "sirius", "wharton", "worktime")
+names(radio2)
+
+#dplyr
+radio3 <- radio3 %>% rename(age = Answer.Age, gender = Answer.Gender, education = Answer.Education, income = Answer.HouseHoldIncome, sirius = Answer.Sirius.Radio, wharton = Answer.Wharton.Radio, worktime = WorkTimeInSeconds)
+names(radio3)
+```
+
+### Q1.2
+
+**As in real world data with user input, the data is incomplete, missing values, and has incorrect responses. There is no general rule for dealing with these problems beyond “use common sense.” In whatever case, explain what the problems were and how you addressed them. Do not use Excel, however tempting it might be.**
+
+Tip: reflect on the reasons for which data could be wrong or missing. How would you address each case? For this homework, if you are trying to predict missing values with regression, you are definitely overthinking. Keep it simple. 
+
+<!-- #radio2$education <- gsub('[^A-z0-9,;-]', "", radio2$education) # uses regular expressions to eliminate misread ASCII character (apostrophe)
+#radio2$education <- gsub("^\\D.*", "", radio2$education)
+# radio2$education <- gsub('[/[‰Ûª]/g]', "", radio2$education)
+# radio2$education <- gsub('[Bachelor\x89۪s]', "Bachelors", radio2$education)
+# radio2$education[c(which(radio2$education == "Some college, no diploma; or Associate\x89۪s degree) || (radio2$education == "Some college, no diploma; or Associate‰Ûªs degree")) <-  "Some college, no diploma; or Associates degree"]
+# radio2$education[c(which(radio2$education == "Some college, no diploma; or Associate\x89۪s degree"))] <-  "Some college, no diploma; or Associates degree"
+# radio2$education[radio2$education == "Some college, no diploma; or Associate‰Ûªs degree"] <-  "Some college, no diploma; or Associates degree"-->
+```{r}
+# =====Remove empty entries========
+radio2[radio2==""] <- NA # Make all empty entries uniform by assigning them the value 'NA'
+radio2 <- na.omit(radio2) # Then remove all rows with an ;'NA' entry
+
+# =====Fix input errors and typos.========
+# EDUCATION: categorical value not chosen, ASCII/Unicode translation error ("string literal "\'" not rendered correctly)
+radio2 <- radio2[-c(which(radio2$education == "select one")),] # Remove "select one" entries from education
+radio2$education <- gsub('[\x89۪]', "", radio2$education) # use regular expressions to isolate the \' that isn't rendering properly
+# radio2$education
+
+## AGE: non-numeric (female, Eighteen (18)), mistyped (27`), and impossible (223) values present 
+radio2 <- radio2[-c(which(radio2$age == "female")),] # Remove row with "female" entry under age
+radio2 <- radio2[-c(which(radio2$age == "223")),] # Remove row with impossible age value (no way of knowing if it should be 22 or 23)
+radio2$age[radio2$age == "Eighteen (18)"] <- "18"  # Change "Eighteen (18)" to 18
+radio2$age[radio2$age == "27`"] <- "27"# Change "27`" to 27
+summary(radio2)
+
+```
+
+
+### Q1.3
+
+**Write a brief report to summarize all the variables collected. Include both summary statistics (including sample size) and graphical displays such as histograms or bar charts where appropriate. Comment on what you have found from this sample. (For example - it's very interesting to think about why would one work for a job that pays only 10cents/each survey? Who are those survey workers? The answer may be interesting even if it may not directly relate to our goal.)**
+```{r}
+summary(radio2)
+
+ggplot(data=radio2, aes(age)) + geom_bar() # shows that the age disribution skews younger, with most users being in their 20s
+ggplot(data=radio2, aes(income)) + geom_bar() # shows most users make $30-$50K, and very few make >$150k
+ggplot(data=radio2, aes(education)) + geom_bar() # users predominantly have an Associate's or Bachelors degree
+ggplot(data=radio2, aes(gender)) + geom_bar() # female to male user ratio ~40/60
+ggplot(data=radio2, aes(sirius)) + geom_bar() # Sirius users outnumber non-Sirius users 3-to-1
+ggplot(data=radio2, aes(wharton)) + geom_bar() # very few listen to Wharton program
+
+```
+
+### Q1.4 Sample property questions
+
+**i. Does this sample appear to be a random sample from the general population of the USA?**
+
+No, this doesn't seem to be a random sample from the general US population. Most strikingly the female-to-male ratio is not 50/50, but more like 40/60 (740/1740 respondents are female, 1000/1740 respondents are male). The age distribution is also skewed to the lower end, with users in their 20s much more represented than older age groups. 
+
+**ii. Does this sample appear to be a random sample from the MTURK population?**
+
+This does appear to be a random sample from the MTURK population since the overall population also skews towards younger users in their 20s and users whose income is on the lower end of all possible categories. The education attainment level of this sample also aligns with the education level of the overall population.
+
+![MTURK population demographics](/Users/josephhaymaker/Desktop/Modern-data-mining/HW1_STAT571/fig2.png)
+
+__Source__: [Who are the Turkers? Worker Demographics in Amazon Mechanical Turk](https://www.researchgate.net/publication/268427703_Who_are_the_Turkers_Worker_Demographics_in_Amazon_Mechanical_Turk)
+
+
+### Q1.5
+
+**Give a final estimate of the Wharton audience size in January 2014. Assume that the sample is a random sample of the MTURK population, and that the proportion of Wharton listeners vs. Sirius listeners in the general population is the same as that in the MTURK population. Briefly summarize your findings and how you came to that conclusion.**
+```{r}
+# Calculate the ratio of Wharton program listeners to total Sirius Listeners
+Sum.listeners <- apply(radio2=="Yes", 
+    MARGIN = 2,
+    FUN = sum)
+
+Sum.listeners
+p <- Sum.listeners[6]/Sum.listeners[5]
+p
+# p equals 0.05156951
+# Thus, 5.16% of Sirius listeners listen to the Wharton program.
+
+# Audience Estimate
+p * 51.6 # multiply by the population of Sirius audiences
+# Output: 2.66. 
+# Thus, we estimate 2.66 million Wharton listeners.
+```
+
+# Simple Regression
+    
+## Question 2
+
+**This exercise is designed to help you understand the linear model and see everything through simulations.**
+
+Presume that $x$ and $y$ are linearly related with a normal error, such that $y = 1 + 1.2x + \epsilon$. The standard deviation of the error is $\sigma = 2$. 
+
+Note: we can create a sample input vector ($n = 40$) for $x$ with the following code:
+
+```{r, eval = F}
+x <- seq(0, 1, length = 40)
+x
+```
+
+
+### Q2.1
+
+**Create a corresponding output vector for $y$ according to the equation given above. Then, create a scatterplot with $\left(x, y\right)$ pairs. Base R plotting is acceptable, but if you can, attempt to use `ggplot2` to create the plot.**
+
+```{r}
+set.seed(1)
+x <- seq(0, 1, length = 40)
+y <- 1 + 1.2 * x + rnorm(40, sd = 2)
+simdata <- data.frame(x,y)
+
+# Plot data
+ggplot(simdata) + 
+  geom_point(aes(x = x, y = y), color = "blue") +
+  labs(title = "Relationship between x and y", x = "x", y = "y")
+```
+
+### Q2.2
+
+**Find the LS estimates of $\beta_0$ and $\beta_1$, using the `lm()` function.**
+
+```{r}
+lm.out <- lm(y ~ x, data = simdata)
+coefficients(lm.out)
+```
+With seed set to 1, the coefficients are 1.3308343 for beta 0 and 0.9064362 for beta 1.
+
+### Q2.3 
+
+**Overlay the LS estimates onto a copy of the scatterplot you made above.**
+
+```{r, eval=T}
+ggplot(simdata, aes(x = x, y = y)) + 
+  geom_point() + 
+  geom_smooth(method="lm", se = F,color = "red")
+```
+
+### Q2.4
+
+**What is the 95% confidence interval for $\beta_1$? Does this confidence interval capture the true $\beta_1$?**
+```{r, eval=T}
+confint(lm.out)
+```
+The 95% confidence interval for Beta 1 is -1.033966 and 2.846838 (seed 1). This interval captures true beta 1 of 1.2.
+
+### Q2.5
+
+**What is your RSE for this linear model fit? Is it close to $\sigma = 2**
+```{r, eval = F}
+summary(lm.out)$sigma # 1.7943. It is close to sigma = 2. RSE will decrease as we increase n.
+summary(lm.out)
+RSS <- sum((lm.out$res)^2)
+RSS
+sqrt(RSS/lm.out$df)
+```
+The RSE for our linear fit model is 1.794303 which is close to sigma = 2
+
+### Q2.6
+
+**This part aims to help understand the notion of sampling statistics, confidence intervals. Let's concentrate on estimating the slope only.** 
+
+**Generate 100 samples of size $n = 40$, and estimate the slope coefficient from each sample. We include some sample code below, which should aim you in setting up the simulation. Note: this code is written clearly but suboptimally; see the appendix for a more R-like way to do this simulation.**
+```{r, eval = F}
+x <- seq(0, 1, length = 40) 
+n_sim <- 100
+b1 <- numeric(n_sim)   # nsim many LS estimates of beta1 (=1.2)
+upper_ci <- numeric(n_sim)  # lower bound
+lower_ci <- numeric(n_sim)  # upper bound
+t_star <- qt(0.975, 38)
+
+# Carry out the simulation
+for (i in 1:n_sim){
+  y <- 1 + 1.2 * x + rnorm(40, sd = 2)
+  lse <- lm(y ~ x)
+  lse_out <- summary(lse)$coefficients
+  se <- lse_out[2, 2]
+  b1[i] <- lse_out[2, 1]
+  upper_ci[i] <- b1[i] + t_star * se
+  lower_ci[i] <- b1[i] - t_star * se
+}
+results <- cbind(se, b1, upper_ci, lower_ci)
+#rm(se, b1, upper_ci, lower_ci, x, n_sim, b1, t_star, lse, lse_out)
+```
+
+**i. Summarize the LS estimates of $\beta_1$ (in the above, `sim_results$b1`). Does the sampling distribution agree with the theory?**
+```{r, eval = F}
+summary(b1)
+sd(b1)
+upperci <- 0.9948+1.96*sd(b1)  # upper CI of b1
+lowerci <- 0.9948-1.96*sd(b1) # lower CI of b1
+upperci
+lowerci
+```
+Our estimation of beta_1 above was 1.127305. In this simulation, the mean of b1 is 1.127305 with standard deviation of 1.085211. The 95% confidence interval given this is [-0.9997085, 3.254318]. Since the true beta (1.2) llies within this interval, the sampling distribution agrees our theory.
+
+
+**ii.  How many times do your 95% confidence intervals cover the true $\beta_1$? Display your confidence intervals graphically.**
+```{r, eval = F}
+n_true_beta1 <-  0
+numeric.upper_ci <- as.numeric(results[,3])
+numeric.lower_ci <- as.numeric(results[,4])
+for (i in 1:100) {
+  if (numeric.upper_ci[i] >= 1.2 & numeric.lower_ci[i] <= 1.2) {
+    n_true_beta1 <- n_true_beta1 + 1}
+}
+n_true_beta1
+x2 <- 1:100
+results.df <- data.frame(results)
+ggplot(results.df, aes(x = x2, y = results.df[,2])) +
+  geom_point(size = 4) +
+  geom_errorbar(aes(ymax = results.df[,3], ymin = results.df[,4])) +
+  xlab("Simulation #") +
+  ylab("Beta_1") + 
+  ggtitle("95% CI's for Beta_1 over 100 Simulations") +
+  geom_hline(yintercept = 1.2, color = "red")
+```
+* The graph above shows the 100 95% CI's generated in our simulation, with the red line representing the true value of beta_1 (which is 1.2).
+* In theory, the 95% CI's should include the real beta_1 95% of the time.
+* In our simulation, our 95% CI's contained the true beta_1 94/100 times, which agrees with the theory.
+
+# Multiple Regression
+
+## Question 3:
+
+**Auto data from ISLR. The original data contains 408 observations about cars. It has some similarity as the data CARS that we use in our lectures. To get the data, first install the package ISLR. The data Auto should be loaded automatically. We use this case to go through methods learnt so far.** 
+
+You can access the necessary data with the following code:
+
+```{r, eval = F}
+# check if you have ISLR package, if not, install it
+if(!requireNamespace('ISLR')) install.packages('ISLR') 
+auto_data <- ISLR::Auto
+```
+
+Get familiar with this dataset first. You can use `?ISLR::Auto` to view a description of the dataset. 
+
+### Q3.1
+**Explore the data, with particular focus on pairwise plots and summary statistics. Briefly summarize your findings and any peculiarities in the data.**
+```{r, eval = F}
+summary(auto_data)
+pairs(~mpg+weight+horsepower+acceleration+displacement,data=auto_data, 
+   main="Scatterplot Matrix")
+pairs(~mpg+origin+cylinders+year,data=auto_data, 
+   main="Scatterplot Matrix")
+```
+
+The data set consists of 392 vehicles with 8 explanatory variables for `mpg`. The summary statistics shows that all varaibles except "name" can be treated as numeric and therefore have mean, median, etc. outputs. The `name` variable has text input. Without further cleaning, `name` is difficult to leverage in fitting a regression model.
+
+From the scatterplot matrix, we can see that `cylinders`, `weight`, `horsepower`, `displacement` and `acceleration` have an inverse relationship with mpg whereas `origin` and `year` have a direct relationship with `mpg`. In addition, `cylinders` and `origin` should be examined as categorical values whereas the other variables can be examined as continuous variables. Finally, the scatterplot matrix gives us an initial read of how the variable correlate to each other. For example, `weight` and `horsepower` appears to have a strong positive relationship. `Horsepower` and `acceleration` appears to have a strong negative relationship.
+
+
+### Q3.2
+**What effect does time have on MPG?**
+
+**i. Start with a simple regression of mpg vs. year and report R's `summary` output. Is year a significant variable at the .05 level? State what effect year has on mpg, if any, according to this model.**
+```{r, eval = F}
+lm1 <- lm(mpg ~ year, data = auto_data)
+summary(lm1)
+```
+* `Year` is a significant variable at the 0.05 level as p is extremely small at  <2e-16. 
+* According to the model, when `year` increases by 1, `mpg`, on average, increases by 1.23.
+
+**ii. Add horsepower on top of the variable year. Is year still a significant variable at the .05 level? Give a precise interpretation of the year effect found here.** 
+```{r, eval = F}
+lm2 <- lm(mpg ~ year+horsepower, data = auto_data)
+summary(lm2)
+```
+* `Year` continues to be a significant variable. 
+* Keeping `horsepower` constant, for each 1 year increase in model `year`, the corresponding change in `mpg` will be, on average, an increase of 0.657.
+
+**iii. The two 95% CI's for the coefficient of year differ among i) and ii). How would you explain the difference to a non-statistician?**
+```{r, eval = F}
+confint(lm1)
+confint(lm2)
+```
+In statistician terms, the confidence interval for year narrows in ii because adding horsepower reduces the model's RSE. Since the confidence interval calculation depends on this, the overall interval tightens with a decrease of RSE. In layman terms, with the introduction of horsepower, more of the MPG's numbers are explained by horsepower and year. This means the fitted model has less variability and can offer a tighter range in estimating the true MPG mean.
+
+**iiii. Do a model with interaction by fitting `lm(mpg ~ year * horsepower)`. Is the interaction effect significant at .05 level? Explain the year effect (if any).** 
+```{r, eval = F}
+# Interaction model
+lm.interaction <- lm(mpg ~ year * horsepower, data = auto_data)
+summary(lm.interaction)
+
+# anova test to see if interaction is significant
+anova(lm2, lm.interaction)
+# Since p value is  < 2.2e-16, this interaction is significant at the 0.05 level.
+
+# Effect of year
+Anova(lm2)
+# Since p-value is very small at < 2.2e-16, we reject H0 at α=0.05. i.e., controlling horsepower, we have evidence to say the effect of Year is different (non-zero). 
+```
+
+### Q3.3
+**Remember that the same variable can play different roles! Take a quick look at the variable `cylinders`, try to use this variable in the following analyses wisely. We all agree that larger number of cylinder will lower mpg. However, we can interpret `cylinders` as either a continuous (numeric) variable or a categorical variable.**
+
+**i. Fit a model, that treats `cylinders` as a continuous/numeric variable: `lm(mpg ~ horsepower + cylinders, ISLR::Auto)`. Is `cylinders` significant at the 0.01 level? What effect does `cylinders` play in this model?**
+```{r, eval = F}
+lm.cylinders <- lm(mpg ~ horsepower + cylinders, data = auto_data)
+summary(lm.cylinders)
+
+
+```
+The p-value of `cylinders` is 2.24e-13.This implies `cylinders` is significant at the 0.01 level. 
+
+The model suggests that keeping `horsepower` constant, for every 1 unit increase in `cylinders`, `mpg`, on average, decreases by 1.91982.
+
+**ii. Fit a model that treats `cylinders` as a categorical/factor variable:  `lm(mpg ~ horsepower + as.factor(cylinders), ISLR::Auto)`. Is `cylinders` significant at the .01 level? What is the effect of `cylinders` in this model? Use `anova(fit1, fit2)` and `Anova(fit2`)` to help gauge the effect. Explain the difference between `anova()` and `Anova`.**
+```{r, eval = F}
+lm.cylinders2 <- lm(mpg ~ horsepower + as.factor(cylinders), data = auto_data)
+summary(lm.cylinders2)
+anova(lm.cylinders, lm.cylinders2)
+Anova(lm.cylinders2)
+```
+* The `anova` test shows that we can reject the null hypothesis H0: Beta of using `cylinders` as factors = Beta of using `cylinders` as numeric.
+* The `Anova` test shows that `cylinders` as a factor is a significant variable with p-value  < 2.2e-16.
+* *Cylinder's effect*: Keeping `horsepower` constant, a vehicle with 4 cylinders, on average will have 6.57344 mpg more than a 3 cylinder vehicle. 
+* `anova()` calculates type I tests, that is, each variable is added in sequential order. Type 1 test is particularly effective in testing effects of interactions. `Anova()` calculates type II or III tests. Type II tests test each main effect after the other main effect and assumes that there is not significant interaction between the factors. This is effective there is indeed no interaction.
+
+**iii. What are the fundamental differences between treating `cylinders` as a numeric and or a factor models?**
+
+The first model assumes that a vehicle can have a non-discrete number of cylinders.
+The second model only takes into account the effects of the number of cylinders present in the data (3, 4, 5, 6, 8).
+
+* Treating `cylinders` as _numeric_ model assumes that a vehicle can have a non-discrete number of cylinders. 
+* Treating `cylinders` as a _factor_ model only takes into account the effects of the number of cylinders present in the data (3, 4, 5, 6, 8). 
+* When modeled as _factor_, the `anova` test checks to see if the means between all the levels inside that factor variable are equal to zero. 
+* When modeled as _numeric_, the `anova` test checks to see if the slope between the outcome and the numeric is zero.
+
+
+### Q3.4
+**Final modelling question: we want to explore the effects of each feature as best as possible. You may explore interactions, feature transformations, higher order terms, or other strategies within reason. The model(s) should be as parsimonious (simple) as possible unless the gain in accuracy is significant from your point of view.**
+
+```{r, eval = F}
+model1 <- lm(mpg ~ horsepower + as.factor(cylinders) + displacement + weight + acceleration + year + as.factor(origin), data = auto_data)
+summary(model1)
+model2 <- lm(mpg ~ horsepower + as.factor(cylinders) + displacement + weight + year + as.factor(origin), data = auto_data)
+summary(model2)
+model3 <- lm(mpg ~ horsepower + as.factor(cylinders) + weight + year + as.factor(origin), data = auto_data)
+summary(model3)
+```
+Model 2 and 3 have similar RSE but Model 3 has one less variable = SIMPLIER = WINNER CHICKEN DINNER! Every varaible is significant in model 3 at alpha = 0.05.
+
+**i. Describe the final model. Include diagnostic plots with particular focus on the model residuals and diagnoses.**
+```{r, eval = F}
+# Final model: 
+summary(model3)
+# The final model uses varaibles horsepower, cyclinders (as factor), weight, year, and origin (as factor). It has a RSE of 3.117 and R-squared of 0.8442.
+
+# Diagnostic plots 
+layout(matrix(c(1,2,3,4),2,2)) 
+plot(model3)
+# Linearity, homoscedacity, and normality assumptions verified -> valid model.
+```
+**ii. Summarize the effects found.**
+
+Per the model, increasing horsepower and weight decreases mpg while increasing years increases mpg. Holding all other variables constant, cars with origin outside of US have higher mpg than those made in US. Cars with 4, 5, 6, 8 cyclinders have higher mpgs than 3-cylinder vehicles.
+
+Per the model, increasing horsepower and weight decreases mpg while increasing years increases mpg. Holding all other variables constant, cars with origin outside of US have higher mpg than those made in US. Cars with 4, 5, 6, 8 cyclinders have higher mpgs than 3-cylinder vehicles.
+
+**iii. Predict the mpg of a car that is: built in 1983, in US, red, 180 inches long, 8 cylinders, 350 displacement, 260 as horsepower and weighs 4000 pounds. Give a 95% CI.**
+```{r, eval = F}
+# Prediction
+bs <- coefficients(model3)
+prediction <- bs[1]+bs[2]*260+ bs[6]*1 + bs[7]*4000 + bs[8]*83
+prediction
+
+# Prediction interval
+RSE <- 3.117
+predict.upper <- prediction + 2*RSE
+predict.lower <- prediction - 2*RSE
+predict.upper
+predict.lower
+```
+The model predicts the car to have mpg of 19.53 with 95% prediction interval [13.298, 25.7767].
+
+## Appendix
+
+This is code that is roughly equivalent to what we provide above in Question 2 (simulations).
+
+```{r, eval = F}
+simulate_lm <- function(n) {
+  # note: `n` is an input but not used (don't worry about this hack)
+  x <- seq(0, 1, length = 40) 
+  y <- 1 + 1.2 * x + rnorm(40, sd = 2)
+  t_star <- qt(0.975, 38)
+  lse <- lm(y ~ x)
+  lse_out <- summary(lse)$coefficients
+  se <- lse_out[2, 2]
+  b1 <- lse_out[2, 1]
+  upper_CI = b1 + t_star * se
+  lower_CI = b1 - t_star * se
+  return(data.frame(se, b1, upper_CI, lower_CI))
+}
+
+# this step runs the simulation 100 times, 
+# then matrix transposes the result so rows are observations 
+sim_results <- data.frame(t(sapply(X = 1:100, FUN = simulate_lm)))
+sim_results
+```
+

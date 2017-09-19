@@ -15,6 +15,7 @@ urlcolor: blue
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(fig.height=5, fig.width=11, warning = F)
 # install.packages("dplyr")
+library(car)
 library(dplyr) # might need to install these
 library(ggplot2) 
 library(ISLR)
@@ -89,7 +90,7 @@ WorkTimeInSeconds)
 
 # dplyr
 #attach(radio)
-newradio <- radio %>%
+newradio2 <- radio %>%
   select(Answer.Age, Answer.Gender, 
 Answer.Education, Answer.HouseHoldIncome, 
 Answer.Sirius.Radio, Answer.Wharton.Radio, 
@@ -109,7 +110,7 @@ colnames(newradio)[colnames(newradio)=="Answer.Wharton.Radio"] <- "wharton"
 colnames(newradio)[colnames(newradio)=="Answer.WorkTimeInSeconds"] <- "worktime"
 
 #dplyr
-newradio <- newradio %>%
+newradio2 <- newradio2 %>%
   rename(age = Answer.Age) %>%
   rename(gender = Answer.Gender) %>%
   rename(education = Answer.Education) %>%
@@ -155,7 +156,7 @@ newradio <- newradio[-c(which(newradio$education == "select one")),]
  newradio$education <- gsub('[\x89]', "'", newradio$education)
  newradio$age <- as.numeric(newradio$age)
 newradio$income <- as.numeric(newradio$income)
-# newradio$education[c(which(newradio$education == "Some college, no diploma; or Associate�???Ts degree"))] <-  "Some college, no diploma; or Associates degree"
+newradio$education[c(which(newradio$education == "Some college, no diploma; or Associate�???Ts degree"))] <-  "Some college, no diploma; or Associates degree"
 ```
 
 
@@ -181,9 +182,15 @@ summary(newradio)
 dim(newradio)
 names(newradio)
 
-hist(newradio$age, breaks = 10)
-hist(newradio$income, breaks = 10)
+hist(newradio$age, breaks = 20)
+# hist(newradio$income, breaks = 10)
 
+# Simple Bar Plot 
+
+
+#  ggplot(newradio, aes(income, income) + geom_bar(stat="identity")
+ggplot(data=newradio, aes(income))
+       
 #plot(newradio$age,newradio$income, "h")
 #plot(newradio$age, "h")
 
@@ -210,8 +217,9 @@ i. Does this sample appear to be a random sample from the general population of 
 ii. Does this sample appear to be a random sample from the MTURK population?
 
 #TODO answer this
-iii. Assume that the proportion of Wharton listeners vs. that of Sirius listeners remains the same in the general population as it is in the MTURK population. Use the data to provide an estimate of the number of Wharton listeners in the USA. In order to make this estimate do you need to break down the proportion of Wharton to Sirius by gender (or by income.)? Provide some graphical or numerical evidence to support your reasoning.
-# synthesize
+
+<!-- iii. Assume that the proportion of Wharton listeners vs. that of Sirius listeners remains the same in the general population as it is in the MTURK population. Use the data to provide an estimate of the number of Wharton listeners in the USA. In order to make this estimate do you need to break down the proportion of Wharton to Sirius by gender (or by income.)? Provide some graphical or numerical evidence to support your reasoning. -->
+
 
 ### Q1.5
 
@@ -297,9 +305,10 @@ b1 <- numeric(n_sim)   # nsim many LS estimates of beta1 (=1.2)
 upper_ci <- numeric(n_sim)  # lower bound
 lower_ci <- numeric(n_sim)  # upper bound
 t_star <- qt(0.975, 38)
-
+ 
 # Carry out the simulation
 for (i in 1:n_sim){
+  set.seed(i)
   y <- 1 + 1.2 * x + rnorm(40, sd = 2)
   lse <- lm(y ~ x)
   lse_out <- summary(lse)$coefficients
@@ -310,10 +319,16 @@ for (i in 1:n_sim){
 }
 results <- cbind(se, b1, upper_ci, lower_ci)
 rm(se, b1, upper_ci, lower_ci, x, n_sim, b1, t_star, lse, lse_out)
+results
+# rm
 ```
 
 i. Summarize the LS estimates of $\beta_1$ (in the above, `sim_results$b1`). Does the sampling distribution agree with the theory? 
+
+
+
 ii.  How many times do your 95% confidence intervals cover the true $\beta_1$? Display your confidence intervals graphically. 
+
 
 
 # Multiple Regression
@@ -332,32 +347,112 @@ auto_data <- ISLR::Auto
 
 Get familiar with this dataset first. You can use `?ISLR::Auto` to view a description of the dataset. 
 
+```{r}
+`?ISLR::Auto`
+```
+
+
 ### Q3.1
 Explore the data, with particular focus on pairwise plots and summary statistics. Briefly summarize your findings and any peculiarities in the data.
+
+```{r}
+summary(auto_data)
+pairs(~mpg+cylinders+weight+horsepower+acceleration+origin,data=auto_data, 
+   main="Scatterplot Matrix")
+pairs(~mpg+origin+year+displacement,data=auto_data, 
+   main="Scatterplot Matrix")
+```
+
+```{r}
+```
 
 
 ### Q3.2
 What effect does time have on MPG?
 
 i. Start with a simple regression of mpg vs. year and report R's `summary` output. Is year a significant variable at the .05 level? State what effect year has on mpg, if any, according to this model. 
+
+```{r}
+lm1 <- lm(mpg ~ year, data = auto_data)
+summary(lm1)
+# Year is a significant variable at the 0.05 level as p is extremely small at  <2e-16. 
+# According to the model, when year increases by 1, mpg, on average, increases by 1.23.
+
+```
+
+
 ii. Add horsepower on top of the variable year. Is year still a significant variable at the .05 level? Give a precise interpretation of the year effect found here. 
+
+# Written response
+```{r}
+lm2 <- lm(mpg ~ year+horsepower, data = auto_data)
+summary(lm2)
+# Year continues to be a significant variable. 
+# If horsepower is fixed, for each 1 year increase in model year, mpg, on average, increases by 0.66.
+
+```
+
 iii. The two 95% CI's for the coefficient of year differ among i) and ii). How would you explain the difference to a non-statistician?
+
+```{r}
+confint(lm1)
+confint(lm2)
+
+```
+
+# written response
+
 iiii. Do a model with interaction by fitting `lm(mpg ~ year * horsepower)`. Is the interaction effect significant at .05 level? Explain the year effect (if any). 
+
+# 
 
 
 ### Q3.3
 Remember that the same variable can play different roles! Take a quick look at the variable `cylinders`, try to use this variable in the following analyses wisely. We all agree that larger number of cylinder will lower mpg. However, we can interpret `cylinders` as either a continuous (numeric) variable or a categorical variable.
 
 i. Fit a model, that treats `cylinders` as a continuous/numeric variable: `lm(mpg ~ horsepower + cylinders, ISLR::Auto)`. Is `cylinders` significant at the 0.01 level? What effect does `cylinders` play in this model?
+
+```{r}
+lm.cylinders <- lm(mpg ~ horsepower + cylinders, data = auto_data)
+summary(lm.cylinders)
+data()
+# Cylinders is significant at the 0.01 level. 
+# The model suggests that when horsepower is fixed, for every 1 unit increase in cylinders, mpg, on average, decreases by 1.91982.
+
+```
+
+
 ii. Fit a model that treats `cylinders` as a categorical/factor variable:  `lm(mpg ~ horsepower + as.factor(cylinders), ISLR::Auto)`. Is `cylinders` significant at the .01 level? What is the effect of `cylinders` in this model? Use `anova(fit1, fit2)` and `Anova(fit2`)` to help gauge the effect. Explain the difference between `anova()` and `Anova`.
-iii. What are the fundamental differences between treating `cylinders` as a numeric and or a factor models? 
+
+```{r}
+lm.cylinders2 <- lm(mpg ~ horsepower + as.factor(cylinders), data = auto_data)
+summary(lm.cylinders2)
+anova(lm.cylinders, lm.cylinders2)
+Anova(lm.cylinders2)
+Anova(lm.cylinders)
+
+# The anova test shows that we can reject the null hypothesis.
+# anova() calculates type I tests, that is, each variable is added in sequential order. Type 1 test particularly effective in testing effects of interactions. Anova() calculates type II or III tests. Type II tests test each variable after all the others, which is effective in testing for the main effects when there is no interaction term.
+
+```
+
+# written response 
+
+iii. What are the fundamental differences between treating `cylinders` as a numeric and or a factor models?
+
+# written response
 
 
 ### Q3.4
 Final modelling question: we want to explore the effects of each feature as best as possible. You may explore interactions, feature transformations, higher order terms, or other strategies within reason. The model(s) should be as parsimonious (simple) as possible unless the gain in accuracy is significant from your point of view.
   
 i. Describe the final model. Include diagnostic plots with particular focus on the model residuals and diagnoses.
+
+
+
 ii. Summarize the effects found.
+
+
 iii. Predict the mpg of a car that is: built in 1983, in US, red, 180 inches long, 8 cylinders, 350 displacement, 260 as horsepower and weighs 4000 pounds. Give a 95% CI.
 
 
