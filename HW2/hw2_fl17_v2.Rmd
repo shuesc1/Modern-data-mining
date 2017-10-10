@@ -1,0 +1,725 @@
+---
+title: "Modern Data Mining - HW 2"
+author:
+- Antina Lee
+- Maria Diaz Ortiz
+- Joseph Haymaker
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.height=5, fig.width=11, warning = F)
+
+# constants for homework assignments
+hw_num <- 2
+hw_due_date <- "10 October, 2017"
+```
+
+## Overview / Instructions
+
+This is homework #`r paste(hw_num)` of STAT 471/571/701. It will be **due on `r paste(hw_due_date)` by 11:59 PM** on Canvas. You can directly edit this file to add your answers. Submit the Rmd file, a PDF or word or HTML version with only 1 submission per HW team.
+
+
+Solutions will be posted. Make sure to go through these files to pick up some tips.
+
+## R Markdown / Knitr tips
+
+You should think of this R Markdown file as generating a polished report, one that you would be happy to show other people (or your boss). There shouldn't be any extraneous output; all graphs and code run should clearly have a reason to be run. That means that any output in the final file should have explanations.
+
+A few tips:
+
+* Keep each chunk to only output one thing! In R, if you're not doing an assignment (with the `<-` operator), it's probably going to print something.
+* If you don't want to print the R code you wrote (but want to run it, and want to show the results), use a chunk declaration like this: `{r, echo=F}`
+* If you don't want to show the results of the R code or the original code, use a chunk declaration like: `{r, include=F}`
+* If you don't want to show the results, but show the original code, use a chunk declaration like: `{r, results='hide'}`.
+* If you don't want to run the R code at all use `{r, eval = F}`.
+* We have shown examples in our lectures files. 
+* For more details about these R Markdown options, see the [documentation](http://yihui.name/knitr/options/).
+* **Delete the instructions and this R Markdown section, since they're not part of your overall report.**
+
+
+```{r library, include=FALSE}
+# add your library imports here:
+#install.packages("maps")
+library(maps)
+library(dplyr)
+library(ISLR)
+library(leaps)
+library(glmnet)
+library(pls)
+library(ggplot2)
+library(dplyr)
+```
+
+## Problem 0
+
+__Review the code and concepts covered during lecture: model selection and penalized regression through elastic net. __
+
+## Problem 1: Model Selection
+
+__Do ISLR, page 262, problem 8, and write up the answer here. This question is designed to help understanding of model selection through simulations. __
+
+```{r}
+#p.262 #8
+#=============================PART A============================
+set.seed(1)
+x <- rnorm(100)
+epsilon <- rnorm(100)
+```
+
+```{r}
+#=============================PART B============================
+#(b) Generate a response vector Y of length n = 100 according to
+#the model
+b0 <- 5 #all numbers randomly assigned
+b1 <- 3
+b2 <- 4
+b3 <- 7.2
+
+y <- b0 + b1*x + b2* x^2 + b3* x^3 + epsilon
+```
+
+```{r}
+#=============================PART C==========================
+# Use the regsubsets() function to perform best subset selection
+# in order to choose the best model containing the predictors
+# X,X2, . . .,X10. What is the best model obtained according to
+# Cp, BIC, and adjusted R2? Show some plots to provide evidence
+# for your answer, and report the coefficients of the best model obtained.
+# Note you will need to use the data.frame() function to
+# create a single data set containing both X and Y .
+
+dataset <- data.frame(y = y, x = x)
+summary(dataset)
+regfit.fullmodel=regsubsets(y ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data=dataset,nvmax=10)
+fullmod.sum=summary(regfit.fullmodel)
+names(fullmod.sum)
+fullmod.sum$rsq
+par(mfrow=c(2,2))
+plot(fullmod.sum$rss,xlab="number of variables", ylab="RSS",type="l")
+plot(fullmod.sum$adjr2,xlab="Number of variables", ylab="Adjusted Rsq",type = "l")
+#adjusted Rsq highest at 4 variables
+which.max(fullmod.sum$adjr2)
+points(4,fullmod.sum$adjr2[4], col="red",cex=2,pch=20)
+
+#Cp and BIC stats
+plot(fullmod.sum$cp,xlab="number of variables",ylab="Cp", type="l")
+which.min(fullmod.sum$cp)
+points(4,fullmod.sum$cp[4],col="red",cex=2,pch=20)
+plot(fullmod.sum$bic,xlab="Number of variables",ylab="BIC",type = "l")
+points(which.min(fullmod.sum$bic), fullmod.sum$bic[which.min(fullmod.sum$bic)],col="red",cex=2,pch=20)
+
+plot(regfit.fullmodel,scale="r2")
+plot(regfit.fullmodel,scale="adjr2")
+plot(regfit.fullmodel,scale = "Cp")
+plot(regfit.fullmodel,scale="bic")
+
+#coefficients for 4 variable model
+coef(regfit.fullmodel,4)
+```
+
+```{r}
+#===============================PART D==========================
+# Repeat (c), using forward stepwise selection and also using backwards
+# stepwise selection. How does your answer compare to the
+# results in (c)?
+
+#<<<<<<<<<<<<<<<<<<<<<<FORWARD STEPWISE SELECTION>>>>>>>>>>>>>>>>>>>
+regfit.forward=regsubsets(y ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data=dataset,nvmax=10,method = "forward")
+forwardmod.sum=summary(regfit.forward)
+forwardmod.sum
+
+par(mfrow = c(2, 2))
+# Cp - 4 vars
+plot(forwardmod.sum$cp, xlab = "Number of variables", ylab = "C_p", type = "l")
+points(which.min(forwardmod.sum$cp), forwardmod.sum$cp[which.min(forwardmod.sum$cp)], col = "red", cex = 2, pch = 20)
+# BIC --indicates 3 vars best
+plot(forwardmod.sum$bic, xlab = "Number of variables", ylab = "BIC", type = "l")
+points(which.min(forwardmod.sum$bic), forwardmod.sum$bic[which.min(forwardmod.sum$bic)], col = "red", cex = 2, pch = 20)
+# adj Rsq - 4 vars
+plot(forwardmod.sum$adjr2, xlab = "Number of variables", ylab = "Adjusted Rsq", type = "l")
+points(which.max(forwardmod.sum$adjr2), forwardmod.sum$adjr2[which.max(forwardmod.sum$adjr2)], col = "red", cex = 2, pch = 20)
+
+coef(regfit.forward,3)
+# (Intercept)           x      I(x^2)      I(x^3) 
+# 5.061507    2.975280    3.876209    7.217639 
+coef(regfit.forward,4)
+# (Intercept)           x      I(x^2)      I(x^3)      I(x^5) 
+# 5.07200775  3.38745596  3.84575641  6.75797426  0.08072292 
+
+```
+
+```{r}
+#<<<<<<<<<<<<<<<<<<<<<<BACKWARDS STEPWISE SELECTION>>>>>>>>>>>>>>>>>>>
+regfit.backward=regsubsets(y ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data=dataset,nvmax=10,method = "backward")
+backwardmod.sum=summary(regfit.backward)
+backwardmod.sum
+
+par(mfrow = c(2, 2))
+# Cp -4  vars
+plot(backwardmod.sum$cp, xlab = "Number of variables", ylab = "C_p", type = "l")
+points(which.min(backwardmod.sum$cp), backwardmod.sum$cp[which.min(backwardmod.sum$cp)], col = "red", cex = 2, pch = 20)
+# BIC --indicates 3 vars best
+plot(backwardmod.sum$bic, xlab = "Number of variables", ylab = "BIC", type = "l")
+points(which.min(backwardmod.sum$bic), backwardmod.sum$bic[which.min(backwardmod.sum$bic)], col = "red", cex = 2, pch = 20)
+# adj Rsq - 4 vars
+plot(backwardmod.sum$adjr2, xlab = "Number of variables", ylab = "Adjusted Rsq", type = "l")
+points(which.max(backwardmod.sum$adjr2), backwardmod.sum$adjr2[which.max(backwardmod.sum$adjr2)], col = "red", cex = 2, pch = 20)
+
+coef(regfit.backward,3)
+# (Intercept)           x      I(x^2)      I(x^3) 
+# 5.061507    2.975280    3.876209    7.217639 
+coef(regfit.backward,4)
+# (Intercept)           x      I(x^2)      I(x^3)      I(x^9) 
+# 5.079236362 3.231905828 3.833494180 7.019555807 0.001290827 
+```
+
+```{r, eval = F}
+#==============================PART E==========================
+# (e) Now fit a lasso model to the simulated data, again using X,X2,
+# . . . , X10 as predictors. Use cross-validation to select the optimal
+# value of λ. Create plots of the cross-validation error as a function
+# of λ. Report the resulting coefficient estimates, and discuss the
+# results obtained.
+
+x_matrix = model.matrix(y ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data = dataset)[, -1]
+lasso.model=glmnet(x_matrix,y,alpha=1,lambda = grid)
+#perform CV to get test error
+set.seed(1)
+crossval.out=cv.glmnet(x_matrix,y,alpha=1)
+plot(crossval.out)
+#lambda between -2.1 and -1.5
+bestlambda=crossval.out$lambda.min
+bestlambda
+# [1] 0.1213782
+lasso.prediction=predict(lasso.model,s=bestlambda,newx = x_matrix)
+#mean((lasso.prediction-y.test)^2)
+output=glmnet(x_matrix,y,alpha=1,lambda = grid)
+lasso.coefficient=predict(output,type="coefficients", s=bestlambda)[1:10,]
+lasso.coefficient
+# (Intercept)            x       I(x^2)       I(x^3)       I(x^4)       I(x^5)       I(x^6)       I(x^7)       I(x^8) 
+# 5.221140e+00 3.033995e+00 3.573236e+00 7.065246e+00 4.755177e-02 1.139770e-02 0.000000e+00 1.880960e-03 0.000000e+00 
+# I(x^9) 
+# 6.309071e-05 
+lasso.coefficient[lasso.coefficient!=0]
+# (Intercept)            x       I(x^2)       I(x^3)       I(x^4)       I(x^5)       I(x^7)       I(x^9) 
+# 5.221140e+00 3.033995e+00 3.573236e+00 7.065246e+00 4.755177e-02 1.139770e-02 1.880960e-03 6.309071e-05 
+```
+
+```{r}
+#======================ques 8, PART F==========================
+# (f) Now generate a response vector Y according to the model
+# Y = β0 + β7X7 + ϵ,
+# and perform best subset selection and the lasso. Discuss the
+# results obtained.
+set.seed(1)
+x <- rnorm(100)
+epsilon <- rnorm(100)
+
+b0 <- 5
+b7 <- 7
+y <- b0 + b7 * x^7 + epsilon
+
+data.abbrev.set <- data.frame(y = y, x = x)
+summary(data.abbrev.set)
+#nvmax - largest subset size to examine
+#regfit.abbrev=regsubsets(y ~ x + I(x^7), data=data.abbrev.set,nvmax=10) #not sure about this line
+regfit.abbrev=regsubsets(y ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data=data.abbrev.set,nvmax=10)
+abbrevmod.sum=summary(regfit.abbrev)
+names(abbrevmod.sum)
+abbrevmod.sum$rsq
+par(mfrow=c(2,2))
+plot(abbrevmod.sum$rss,xlab="number of variables", ylab="RSS",type="l")
+plot(abbrevmod.sum$adjr2,xlab="Number of variables", ylab="Adjusted Rsq",type = "l")
+which.max(abbrevmod.sum$adjr2)
+points(1,abbrevmod.sum$adjr2[1], col="red",cex=2,pch=20)
+
+plot(abbrevmod.sum$cp,xlab="number of variables",ylab="Cp", type="l")
+which.min(abbrevmod.sum$cp)
+points(1,abbrevmod.sum$cp[1],col="red",cex=2,pch=20)
+plot(abbrevmod.sum$bic,xlab="Number of variables",ylab="BIC",type = "l")
+points(which.min(abbrevmod.sum$bic), abbrevmod.sum$bic[which.min(abbrevmod.sum$bic)],col="red",cex=2,pch=20)
+
+plot(regfit.abbrev,scale="r2")
+plot(regfit.abbrev,scale="adjr2")
+plot(regfit.abbrev,scale = "Cp")
+plot(regfit.abbrev,scale="bic")
+
+#coefficients for 1 variable model -- results don't make sense
+coef(regfit.fullmodel,1)
+# clearly not right
+# (Intercept)      I(x^3) 
+# 8.279046    8.396432
+coef(regfit.fullmodel,2)
+# (Intercept)      I(x^2)      I(x^3) 
+# 5.319997    3.740657    8.050129 
+coef(regfit.fullmodel,3)
+# (Intercept)           x      I(x^2)      I(x^3) 
+# 5.061507    2.975280    3.876209    7.217639 
+
+#lasso - results make sense
+x_matrix <- model.matrix(y ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data = data.abbrev.set)[, -1]
+crossv.lasso <- cv.glmnet(x_matrix, y, alpha = 1)
+best_lamd <- crossv.lasso$lambda.min
+best_lamd
+lasso.modl <- glmnet(x_matrix, y, alpha = 1)
+lasso.coeffs=predict(lasso.modl, s = best_lamd, type = "coefficients")[1:11, ]
+lasso.coeffs
+lasso.coeffs[lasso.coeffs!=0]
+# (Intercept)      I(x^7) 
+# 5.904188    6.776797 
+```
+
+
+
+
+## Problem 2: Regularization
+
+Crime data continuation:  We use a subset of the crime data discussed in class, but only look at Florida and California. `crimedata` is available on Canvas; we show the code to clean here. 
+
+```{r}
+crime <- read.csv("CrimeData.csv", stringsAsFactors = F, na.strings = c("?"))
+crime <- dplyr::filter(crime, state %in% c("FL", "CA"))
+```
+
+Our goal is to find the factors which relate to violent crime. This variable is included in crime as `crime$violentcrimes.perpop`.
+
+**A)** __EDA__
+
+* Clean the data first
+
+```{r}
+#names(crime)
+dim(crime) #369 communities x 147 variables
+sum(is.na(crime)) #7204 NA entries
+#dim(na.omit(crime)) #would leave 0 communities
+# =============================data1 subset==============================
+data1<- crime[,c(2,6:103,121,122,123,130:147)] #subset removing sparse police dept info
+#names(data1)
+names(data1[, 103:120]) #crime variables
+
+sapply(data1, function(x) any(is.na(x))) # T/F for each var
+apply(data1, 2, function(x) any(is.na(x)))  # column-wise missing
+apply(data1, 1, function(x) any(is.na(x)))  # row-wise missing
+sum(is.na(data1$violentcrimes.perpop)) #1
+ggplot(data1, aes(x = violentcrimes.perpop)) +
+  geom_histogram(binwidth = 40) +
+  ggtitle("Histogram of violent crimes per population") +
+  ylab("Frequency") #peaks between 250 & 750
+rownames(data1)[is.na(data1$violentcrimes.perpop)]
+
+var_names_out <- c("num.urban","other.percap", "num.underpov",
+                   "num.vacant.house","num.murders","num.rapes",
+                   "num.robberies", "num.assaults", "num.burglaries",
+                   "num.larcenies", "num.autothefts", "num.arsons")
+data1 <- data1[!(names(data1) %in% var_names_out)]
+names_other_crimes <- c( "murder.perpop", "rapes.perpop",                   
+                        "robberies.perpop",  "assaults.perpop",                
+                        "burglaries.perpop", "larcenies.perpop",               
+                        "autothefts.perpop", "arsons.perpop",                  
+                         "nonviolentcrimes.perpop")
+# =============================data2 subset==============================
+data2 <- data1[!(names(data1) %in% names_other_crimes)] #all other crime data
+dim(data2) #369 communities x 99 variables
+# =============================data3 subset==============================
+sum(is.na(data2)) #1 NA to remove
+data3 <- na.omit(data2)
+dim(data3) #368 communities x 99 variables
+#write.csv(data3, "CrimeData_CA_FL_clean.csv", row.names = FALSE)
+#names(data3)
+```
+
+
+* Prepare a set of sensible factors/variables that you may use to build a model
+* Show the heatmap with mean violent crime by state. You may also show a couple of your favorate summary statistics by state through the heatmaps.  
+
+```{r, echo=F}
+# ====================Map of mean violent crime===============================
+#crime.data <- read.csv("CrimeData.csv", header=T, na.string=c("", "?")) #load all states data
+crime.data <- data3
+data.s <- crime.data %>%
+  group_by(state) %>%
+  summarise(
+    mean.violentcrime=mean(violentcrimes.perpop), 
+    violentcrime.min=min(violentcrimes.perpop),
+    violentcrime.max=max(violentcrimes.perpop),
+    crime.rate=mean(violentcrimes.perpop, na.rm=TRUE), #ignore the missing values
+    n=n())
+violentcrime <- data.s[, c("state", "mean.violentcrime")]
+names(violentcrime)
+violentcrime
+violentcrime$region <- tolower(state.name[match(violentcrime$state, state.abb)])
+violentcrime$center_lat  <- state.center$x[match(violentcrime$state, state.abb)]
+violentcrime$center_long <- state.center$y[match(violentcrime$state, state.abb)]
+states <- map_data("state") 
+map <- merge(states, violentcrime, sort=FALSE, by="region", all.x=TRUE)
+map <- map[order(map$order),]
+ggplot(map, aes(x=long, y=lat, group=group))+
+  geom_polygon(aes(fill=mean.violentcrime))+
+  geom_path()+ 
+  geom_text(data=violentcrime, aes(x=center_lat, y=center_long, group=NA, 
+                             label=state, size=2), show.legend =FALSE)+
+  scale_fill_continuous(limits=c(500, 1200),name="Mean violent crime",
+                        low="light blue", high="dark blue")+
+                        xlab("Map of mean violent crime")
+```
+
+```{r, echo=F}
+# ====================Map of percent unemployment===============================
+#crime.data <- read.csv("CrimeData.csv", header=T, na.string=c("", "?")) #load all states data
+crime.data <- data3
+names(crime.data)
+data.s <- crime.data %>%
+  group_by(state) %>%
+  summarise(
+    mean.unemployed=mean(pct.unemployed), 
+    unemployed.min=min(pct.unemployed),
+    unemployed.max=max(pct.unemployed),
+    crime.rate=mean(violentcrimes.perpop, na.rm=TRUE), #ignore the missing values
+    n=n())
+unemployed <- data.s[, c("state", "mean.unemployed")]
+names(unemployed)
+unemployed
+unemployed$region <- tolower(state.name[match(unemployed$state, state.abb)])
+unemployed$center_lat  <- state.center$x[match(unemployed$state, state.abb)]
+unemployed$center_long <- state.center$y[match(unemployed$state, state.abb)]
+states <- map_data("state") 
+map <- merge(states, unemployed, sort=FALSE, by="region", all.x=TRUE)
+map <- map[order(map$order),]
+ggplot(map, aes(x=long, y=lat, group=group))+
+  geom_polygon(aes(fill=mean.unemployed))+
+  geom_path()+ 
+  geom_text(data=unemployed, aes(x=center_lat, y=center_long, group=NA, 
+                             label=state, size=2), show.legend =FALSE)+
+  scale_fill_continuous(limits=c(5, 7),name="Percent unemployed",
+                        low="light blue", high="dark blue")+
+                        xlab("Map of mean percent unemployment per state")
+```
+
+
+```{r, echo=F}
+# ====================Map of percent of population with children and never married===============================
+#crime.data <- read.csv("CrimeData.csv", header=T, na.string=c("", "?")) #load all states data
+crime.data <- data3
+names(crime.data)
+data.s <- crime.data %>%
+  group_by(state) %>%
+  summarise(
+    mean.kidsnvrmarried=mean(pct.kids.nvrmarried), 
+    kidsnvrmarried.min=min(pct.kids.nvrmarried),
+    kidsnvrmarried.max=max(pct.kids.nvrmarried),
+    crime.rate=mean(violentcrimes.perpop, na.rm=TRUE), #ignore the missing values
+    n=n())
+kidsnvrmarried <- data.s[, c("state", "mean.kidsnvrmarried")]
+names(kidsnvrmarried)
+kidsnvrmarried
+kidsnvrmarried$region <- tolower(state.name[match(kidsnvrmarried$state, state.abb)])
+kidsnvrmarried$center_lat  <- state.center$x[match(kidsnvrmarried$state, state.abb)]
+kidsnvrmarried$center_long <- state.center$y[match(kidsnvrmarried$state, state.abb)]
+states <- map_data("state") 
+map <- merge(states, kidsnvrmarried, sort=FALSE, by="region", all.x=TRUE)
+map <- map[order(map$order),]
+ggplot(map, aes(x=long, y=lat, group=group))+
+  geom_polygon(aes(fill=mean.kidsnvrmarried))+
+  geom_path()+ 
+  geom_text(data=kidsnvrmarried, aes(x=center_lat, y=center_long, group=NA, 
+                             label=state, size=2), show.legend =FALSE)+
+  scale_fill_continuous(limits=c(3, 4),name="Percent of pop. w/ children and never married",
+                        low="light blue", high="dark blue")+
+                        xlab("Map of percent of population with children and never married")
+```
+
+
+* __Write a brief summary based on your EDA__
+
+* After performing exploratory data analysis we find that the majority of the violent crime incidents in FL and CA communities fall between 250 and 750, and reach up to 3900. We then examined three heat maps for various characteristics, namely mean violent crime, mean unemployment, and mean percent of pop. with children and never married. We find that FL has roughly 300 more violent crimes. This contrasts with mean unemployment, where CA has a 1% lead on unemployment over FL. Mean percent of population with children and never married is only slightly higher in FL compared to CA, with a ~.6% difference between them.
+
+mean violent crime
+CA	810.4694			
+FL	1159.0469	
+
+mean unemployment
+CA	6.353705			
+FL	5.713444	
+
+mean percent of pop. with children and never married
+CA	3.390072			
+FL	3.950000
+
+
+**B)** __Use LASSO to choose a reasonable, small model. Fit an OLS model with the variables obtained. The final model should only include variables with p-values < 0.05. Note: you may choose to use lambda 1se or lambda min to answer the following questions where apply.__
+
+
+```{r}
+#data3
+#data3[, 99]
+#data3$violentcrimes.perpop
+Y <- data3$violentcrimes.perpop # extract Y
+X <- model.matrix(violentcrimes.perpop~., data=data3)[, -1]
+     # get X variables as a matrix. it will also code the categorical 
+     # variables correctly!. The first col of model.matrix is vector 1
+#colnames(X)
+
+#============using given λ==================
+fit.lambda <- glmnet(X,Y,alpha=1,lambda = 100)
+names(fit.lambda)  
+fit.lambda$lambda # lambda used
+fit.lambda$beta
+fit.lambda$df    # number of non-zero coeff's -- 3 features
+fit.lambda$a0 # beta_0 -- 1836.963 
+coef(fit.lambda) # beta hat of predictors in the original scales, same as fit.lambda$beta
+
+# more advanced way to extract non-zero output
+tmp_coeffs <- coef(fit.lambda)  # output the LASSO estimates
+tmp_coeffs 
+data.frame(name = tmp_coeffs@Dimnames[[1]][tmp_coeffs@i + 1], coefficient = tmp_coeffs@x) # we listed those variables with non-zero estimates
+# (Intercept)	1836.962939			
+# race.pctblack	8.745629			
+# pct.kids2parents	-18.807627			
+# pct.kids.nvrmarried	80.625980
+
+
+#=========================using a set of λ========================
+fit.lambda <- glmnet(X, Y, alpha=1)
+str(fit.lambda)
+fit.lambda$lambda
+plot(fit.lambda)
+#<<<<<<CV to select λ>>>>>>>
+fit.cv <- cv.glmnet(X, Y, alpha=1, nfolds=10 ) 
+fit.cv$cvm               # the mean cv error for each lambda
+fit.cv$lambda.min #28.51188
+fit.cv$nzero             # number of non-zero coeff's returned for each lambda
+#plot(fit.cv$lambda, fit.cv$nzero, xlab="lambda", ylab="number of non-zeros")
+plot(fit.cv$lambda , main  = "There are 100 lambda used" , xlab = "Lambda Index" , ylab = "Lambda Value" ) 
+head(data.frame( Cross.Validation.Erorr = fit.cv$cvm , Lambda = fit.cv$lambda))            
+plot(fit.cv$lambda, fit.cv$cvm, xlab=expression(lambda), ylab="mean cv errors")
+plot(fit.cv)
+# using λ=lambda.min
+coef.min <- coef(fit.cv, s="lambda.min")  #s=c("lambda.1se","lambda.min") or lambda value
+coef.min <- coef.min[which(coef.min !=0),]   # get the non=zero coefficients
+coef.min  # the set of predictors chosen
+rownames(as.matrix(coef.min)) # shows only names, not estimates -- 15 variables
+# using λ=lambda.1se
+coef.1se <- coef(fit.cv, s="lambda.1se")  
+coef.1se <- coef.1se[which(coef.1se !=0),] 
+coef.1se
+rownames(as.matrix(coef.1se)) # only 3 variables
+# using all non-zero coefficients
+coef.nzero <-coef(fit.cv, nzero = 3) 
+coef.nzero <- coef.nzero[which(coef.nzero !=0), ]
+rownames(as.matrix(coef.nzero)) 
+# final-- using lambda.min
+coef.min <- coef(fit.cv, s="lambda.min")  #s=c("lambda.1se","lambda.min") or lambda value
+coef.min <- coef.min[which(coef.min !=0),]   # get the non=zero coefficients
+coef.min 
+#using LASSO variables to fit an lm() model
+var.min <- rownames(as.matrix(coef.min)) 
+lm.input <- as.formula(paste("violentcrimes.perpop", "~", paste(var.min[-1], collapse = "+"))) 
+lm.input
+
+fit.min.lm <- lm(lm.input, data=data3)
+lm.output <- coef(fit.min.lm) # output lm estimates
+summary(fit.min.lm) 
+comp <- data.frame(coef.min, lm.output)
+names(comp) <-c("estimates from LASSO", "lm estimates")
+comp
+
+```
+
+```{r, eval=FALSE, include=FALSE}
+#==============ALTERNATE METHOD (code not run)--LASSO==================
+fit.lambda <- glmnet(X,Y,alpha=1,lambda = grid)
+plot(fit.lambda)
+#now perform CV and get test error
+set.seed(1)
+cv.out=cv.glmnet(X,Y,alpha=1)
+plot(cv.out) #lambda.min ~3.1, lambda.1se ~4.9
+bestlam=cv.out$lambda.min
+# lasso.pred=predict(lasso.mod,s=bestlam,newx=X[test,])
+# mean((lasso.pred-y.test)^2)
+#resulting coeff estimates are sparse w/ Lasso
+out=glmnet(X,Y,alpha=1,lambda=grid)
+lasso.coef=predict(out,type="coefficients",s=bestlam)[1:20,]
+lasso.coef
+coef.min <- lasso.coef[lasso.coef != 0]
+    #  (Intercept)          stateFL    race.pctblack pct.farmself.inc      pct.inv.inc       pct.retire 
+    # 5723.1385631        5.3819202       17.3853804      -19.3810697       -1.3239907       -0.1065205 
+coef.min
+var.min <- rownames(as.matrix(coef.min)) # output the names
+lm.input <- as.formula(paste("violentcrimes.perpop", "~", paste(var.min[-1], collapse = "+"))) # prepare for lm fomulae
+lm.input
+# violentcrimes.perpop ~ stateFL + race.pctblack + pct.farmself.inc + 
+#     pct.inv.inc + pct.retire
+
+fit.min.lm <- lm(lm.input, data=data3)
+lm.output <- coef(fit.min.lm) # output lm estimates
+summary(fit.min.lm) 
+```
+
+__1. What is the model reported by LASSO?__
+
+Using lambda.min:
+```{r}
+coef.min <- coef(fit.cv, s="lambda.min")  
+coef.min <- coef.min[which(coef.min !=0),]   
+var.min <- rownames(as.matrix(coef.min)) 
+lm.input <- as.formula(paste("violentcrimes.perpop", "~", paste(var.min[-1], collapse = "+"))) 
+lm.input
+summary(lm(violentcrimes.perpop ~ race.pctblack + pct.farmself.inc + pct.inv.inc + 
+    asian.percap + male.pct.divorce + pct.kids2parents + pct.workmom + 
+    num.kids.nvrmarried + pct.kids.nvrmarried + pct.english.only + 
+    pct.house.occup + pct.house.vacant + med.yr.house.built + 
+    pct.house.nophone + num.in.shelters, data3))
+```
+
+Using lambda.1se:
+```{r}
+coef.1se <- coef(fit.cv, s="lambda.1se")  
+coef.1se <- coef.1se[which(coef.1se !=0),] 
+#coef.1se
+#rownames(as.matrix(coef.1se))
+var.min <- rownames(as.matrix(coef.1se))
+lm.input <- as.formula(paste("violentcrimes.perpop", "~", paste(var.min[-1], collapse = "+"))) 
+lm.input
+summary(lm(violentcrimes.perpop ~ race.pctblack + pct.kids2parents + pct.kids.nvrmarried + 
+    pct.house.vacant, data3))
+```
+
+
+__2. What is the model after running OLS?__
+
+violentcrimes.perpop ~ race.pctblack + pct.farmself.inc + pct.inv.inc + 
+    asian.percap + male.pct.divorce + pct.kids2parents + pct.workmom + 
+    num.kids.nvrmarried + pct.kids.nvrmarried + pct.english.only + 
+    pct.house.occup + pct.house.vacant + med.yr.house.built + 
+    pct.house.nophone + num.in.shelters
+
+```{r}
+summary(lm(violentcrimes.perpop ~ race.pctblack + pct.farmself.inc + pct.inv.inc + 
+    asian.percap + male.pct.divorce + pct.kids2parents + pct.workmom + 
+    num.kids.nvrmarried + pct.kids.nvrmarried + pct.english.only + 
+    pct.house.occup + pct.house.vacant + med.yr.house.built + 
+    pct.house.nophone + num.in.shelters, data3))
+```
+
+__3. What is your final model, after excluding high p-value variables? You will need to use model selection method to obtain this final model. Make it clear what criterion/criteria you have used and justify why they are appropriate.__
+
+```{r, eval=FALSE, include=FALSE}
+#==============Obtaining final model with model selection===================
+#<<<<<<All subsets>>>>>>>
+fit.exh <- regsubsets(lm.input, data3, nvmax=15, method="exhaustive")
+names(fit.exh)
+summary(fit.exh)
+exh.summary <- summary(fit.exh)
+names(exh.summary)
+exh.summary$rsq
+par(mfrow=c(2,2))
+plot(exh.summary$rss,xlab="Number of Variables", ylab="RSS",type="l")
+plot(exh.summary$adjr2,xlab="Number of Variables", ylab="Adjusted RSq",type="l")
+which.max(exh.summary$adjr2)
+points(which.max(exh.summary$adjr2),exh.summary$adjr2[which.max(exh.summary$adjr2)], col="red",cex=2,pch=20) #14 variables
+plot(exh.summary$cp,xlab="number of variables",ylab="Cp", type = 'l')
+which.min(exh.summary$cp)
+points(which.min(exh.summary$cp),exh.summary$cp[which.min(exh.summary$cp)],col="red",cex=2,pch=20) # 10 variables
+plot(exh.summary$bic,xlab="number of variables",ylab="BIC", type = 'l')
+points(which.min(exh.summary$bic),exh.summary$bic[which.min(exh.summary$bic)],col="red",cex=2,pch=20) # 7 variables
+# let's go with 10 variables
+coef.exh <- coef(fit.exh,10)
+var.min <- rownames(as.matrix(coef.exh)) # output the names
+print("============10 variable model using all subsets==========")
+lm.input2 <- as.formula(paste("violentcrimes.perpop", "~", paste(var.min[-1], collapse = "+"))) # prepare for lm fomulae
+lm.input2
+coef.exh
+print("============BIC with 10 variables==========")
+exh.summary$bic[10] #-415.058
+#exh.summary$cp[10] # 12.14528
+```
+
+```{r, eval=FALSE, include=FALSE}
+#<<<<<<Forward stepwise selection>>>>>>>
+fit.fwd=regsubsets(lm.input,data=data3 ,nvmax =15, method ="forward")
+summary(fit.fwd)
+fit.fwd.summary <-summary(fit.fwd)
+names(fit.fwd.summary)
+# criteria plots
+par(mfrow=c(2,2))
+plot(fit.fwd.summary$rss,xlab="Number of Variables", ylab="RSS",type="l")
+plot(fit.fwd.summary$adjr2,xlab="Number of Variables", ylab="Adjusted RSq",type="l")
+points(which.max(fit.fwd.summary$adjr2),fit.fwd.summary$adjr2[which.max(fit.fwd.summary$adjr2)], col="red",cex=2,pch=20) # 14 variables
+plot(fit.fwd.summary$cp,xlab="number of variables",ylab="Cp", type = 'l')
+points(which.min(fit.fwd.summary$cp),fit.fwd.summary$cp[which.min(fit.fwd.summary$cp)],col="red",cex=2,pch=20) # 9 variables
+plot(fit.fwd.summary$bic,xlab="number of variables",ylab="BIC", type = 'l')
+points(which.min(fit.fwd.summary$bic),fit.fwd.summary$bic[which.min(fit.fwd.summary$bic)],col="red",cex=2,pch=20) # 8 variables
+# choose to go with 10 variables
+coef.fit.fwd <- coef(fit.fwd,10)
+var.min <- rownames(as.matrix(coef.fit.fwd)) # output the names
+print("============10 variable model using forwards stepwise selection==========")
+lm.input3 <- as.formula(paste("violentcrimes.perpop", "~", paste(var.min[-1], collapse = "+"))) # prepare for lm fomulae
+lm.input3
+coef.fit.fwd
+print("============BIC with 10 variables==========")
+fit.fwd.summary$bic[10] #-414.4246
+#fit.fwd.summary$cp[10] #12.76223
+```
+
+```{r, eval=FALSE, include=FALSE}
+#<<<<<<Backward stepwise selection>>>>>>>
+fit.bwd=regsubsets(lm.input,data=data3 ,nvmax =15,method ="backward")
+summary(fit.bwd)
+fit.bwd.summary <-summary(fit.bwd)
+names(fit.bwd.summary)
+# criteria plots
+par(mfrow=c(2,2))
+plot(fit.bwd.summary$rss,xlab="Number of Variables", ylab="RSS",type="l")
+plot(fit.bwd.summary$adjr2,xlab="Number of Variables", ylab="Adjusted RSq",type="l")
+points(which.max(fit.bwd.summary$adjr2),fit.bwd.summary$adjr2[which.max(fit.bwd.summary$adjr2)], col="red",cex=2,pch=20) # 10 variables
+plot(fit.bwd.summary$cp,xlab="number of variables",ylab="Cp", type = 'l')
+points(which.min(fit.bwd.summary$cp),fit.bwd.summary$cp[which.min(fit.bwd.summary$cp)],col="red",cex=2,pch=20) # 10 variables
+plot(fit.bwd.summary$bic,xlab="number of variables",ylab="BIC", type = 'l')
+points(which.min(fit.bwd.summary$bic),fit.bwd.summary$bic[which.min(fit.bwd.summary$bic)],col="red",cex=2,pch=20) # 7 variables
+# choose to go with 9 variables
+coef.fit.bwd <- coef(fit.bwd,9)
+var.min <- rownames(as.matrix(coef.fit.bwd)) # output the names
+print("============9 variable model using backwards stepwise==========")
+lm.input4 <- as.formula(paste("violentcrimes.perpop", "~", paste(var.min[-1], collapse = "+"))) # prepare for lm fomulae
+lm.input4
+coef.fit.bwd
+print("============BIC with 9 variables==========")
+fit.bwd.summary$bic[9] #-418.4316
+#fit.bwd.summary$cp[9] #12.62035
+```
+
+_Our final specified model obtained by backward stepwise selection is:_
+
+violentcrimes.perpop ~ race.pctblack + asian.percap + male.pct.divorce + 
+    pct.kids2parents + pct.workmom + pct.kids.nvrmarried + pct.english.only + 
+    pct.house.occup + num.in.shelters
+
+```{r}
+summary(lm(violentcrimes.perpop ~ race.pctblack + asian.percap + male.pct.divorce + 
+    pct.kids2parents + pct.workmom + pct.kids.nvrmarried + pct.english.only + 
+    pct.house.occup + num.in.shelters, data3))
+```
+
+We took the `lm()` inputs obtained from LASSO and then performed model selection by comparing the best models from all subset, forward stepwise, and backward stepwise selection techniques. We reached the conclusion that the above model was the best based on BIC score of the all subset, forward stepwise, and backward stepwise selection models which were -415.058, -414.4246, and -418.4316, respectively.
+
+
+**C)** __Now, instead of Lasso, we want to consider how changing the value of alpha (i.e. mixing between Lasso and Ridge) will affect the model. Cross-validate between alpha and lambda, instead of just lambda. Note that the final model may have variables with p-values higher than 0.05; this is because we are optimizing for accuracy rather than parsimoniousness.__
+
+__1. What is your final elastic net model? What were the alpha and lambda values? What is the prediction error?__
+
+
+__2. Use the elastic net variables in an OLS model. What is the equation, and what is the prediction error.__
+
+__3. Summarize your findings, with particular focus on the difference between the two equations.__
+ 
+
+**B+)** __Repeat similar stepts as that of **B)** but start with the set of variables that also include all two way interactions__
+
+__1. How many variables do you have now?__
+
+__2. Comparing the final models with the ones from **B)**, which one would you use? Commenting on your choice.__
+

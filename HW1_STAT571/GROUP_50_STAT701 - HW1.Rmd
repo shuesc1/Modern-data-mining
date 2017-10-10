@@ -6,8 +6,8 @@ author:
 - Maria Diaz Ortiz
 date: 'Due: September 17, 2017'
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
   word_document: default
 urlcolor: blue
 ---
@@ -110,7 +110,7 @@ radio2 <- na.omit(radio2) # Then remove all rows with an ;'NA' entry
 # =====Fix input errors and typos.========
 # EDUCATION: categorical value not chosen, ASCII/Unicode translation error ("string literal "\'" not rendered correctly)
 radio2 <- radio2[-c(which(radio2$education == "select one")),] # Remove "select one" entries from education
-radio2$education <- gsub('[\x89۪]', "", radio2$education) # use regular expressions to isolate the \' that isn't rendering properly
+radio2$education <- gsub('[\x89]', "", radio2$education) # use regular expressions to isolate the \' that isn't rendering properly
 # radio2$education
 
 ## AGE: non-numeric (female, Eighteen (18)), mistyped (27`), and impossible (223) values present 
@@ -148,7 +148,7 @@ No, this doesn't seem to be a random sample from the general US population. Most
 
 This does appear to be a random sample from the MTURK population since the overall population also skews towards younger users in their 20s and users whose income is on the lower end of all possible categories. The education attainment level of this sample also aligns with the education level of the overall population.
 
-![MTURK population demographics](/Users/josephhaymaker/Desktop/Modern-data-mining/HW1_STAT571/fig2.png)
+![MTURK population demographics](/Users/josephhaymaker/Desktop/STAT571_Modern-data-mining/HW1_STAT571/fig2.png)
 
 __Source__: [Who are the Turkers? Worker Demographics in Amazon Mechanical Turk](https://www.researchgate.net/publication/268427703_Who_are_the_Turkers_Worker_Demographics_in_Amazon_Mechanical_Turk)
 
