@@ -47,267 +47,217 @@ __Review the code and concepts covered during lecture: model selection and penal
 
 __Do ISLR, page 262, problem 8, and write up the answer here. This question is designed to help understanding of model selection through simulations. __
 
-(a) Use the rnorm() function to generate a predictor X of length n = 100, as well as a noise vector ε of length n = 100.
-
-We 'll first set seed to keep our numbers consistent and prepare the x and noise variables.
 ```{r}
+#p.262 #8
+#=============================PART A============================
 set.seed(1)
 x <- rnorm(100)
-noise <- rnorm(100) 
+epsilon <- rnorm(100)
 ```
 
-(b) Generate a response vector Y of length n = 100 according to the model
-Y = β0 +β1X +β2X2 +β3X3 +ε, where β0, β1, β2, and β3 are constants of your choice.
 ```{r}
+#=============================PART B============================
+#(b) Generate a response vector Y of length n = 100 according to
+#the model
+b0 <- 5 #all numbers randomly assigned
+b1 <- 3
+b2 <- 4
+b3 <- 7.2
+
+y <- b0 + b1*x + b2* x^2 + b3* x^3 + epsilon
+```
+
+```{r}
+#=============================PART C==========================
+# Use the regsubsets() function to perform best subset selection
+# in order to choose the best model containing the predictors
+# X,X2, . . .,X10. What is the best model obtained according to
+# Cp, BIC, and adjusted R2? Show some plots to provide evidence
+# for your answer, and report the coefficients of the best model obtained.
+# Note you will need to use the data.frame() function to
+# create a single data set containing both X and Y .
+
+dataset <- data.frame(y = y, x = x)
+summary(dataset)
+regfit.fullmodel=regsubsets(y ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data=dataset,nvmax=10)
+fullmod.sum=summary(regfit.fullmodel)
+names(fullmod.sum)
+fullmod.sum$rsq
+par(mfrow=c(2,2))
+plot(fullmod.sum$rss,xlab="number of variables", ylab="RSS",type="l")
+plot(fullmod.sum$adjr2,xlab="Number of variables", ylab="Adjusted Rsq",type = "l")
+#adjusted Rsq highest at 4 variables
+which.max(fullmod.sum$adjr2)
+points(4,fullmod.sum$adjr2[4], col="red",cex=2,pch=20)
+
+#Cp and BIC stats
+plot(fullmod.sum$cp,xlab="number of variables",ylab="Cp", type="l")
+which.min(fullmod.sum$cp)
+points(4,fullmod.sum$cp[4],col="red",cex=2,pch=20)
+plot(fullmod.sum$bic,xlab="Number of variables",ylab="BIC",type = "l")
+points(which.min(fullmod.sum$bic), fullmod.sum$bic[which.min(fullmod.sum$bic)],col="red",cex=2,pch=20)
+
+plot(regfit.fullmodel,scale="r2")
+plot(regfit.fullmodel,scale="adjr2")
+plot(regfit.fullmodel,scale = "Cp")
+plot(regfit.fullmodel,scale="bic")
+
+#coefficients for 4 variable model
+coef(regfit.fullmodel,4)
+```
+
+```{r}
+#===============================PART D==========================
+# Repeat (c), using forward stepwise selection and also using backwards
+# stepwise selection. How does your answer compare to the
+# results in (c)?
+
+#<<<<<<<<<<<<<<<<<<<<<<FORWARD STEPWISE SELECTION>>>>>>>>>>>>>>>>>>>
+regfit.forward=regsubsets(y ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data=dataset,nvmax=10,method = "forward")
+forwardmod.sum=summary(regfit.forward)
+forwardmod.sum
+
+par(mfrow = c(2, 2))
+# Cp - 4 vars
+plot(forwardmod.sum$cp, xlab = "Number of variables", ylab = "C_p", type = "l")
+points(which.min(forwardmod.sum$cp), forwardmod.sum$cp[which.min(forwardmod.sum$cp)], col = "red", cex = 2, pch = 20)
+# BIC --indicates 3 vars best
+plot(forwardmod.sum$bic, xlab = "Number of variables", ylab = "BIC", type = "l")
+points(which.min(forwardmod.sum$bic), forwardmod.sum$bic[which.min(forwardmod.sum$bic)], col = "red", cex = 2, pch = 20)
+# adj Rsq - 4 vars
+plot(forwardmod.sum$adjr2, xlab = "Number of variables", ylab = "Adjusted Rsq", type = "l")
+points(which.max(forwardmod.sum$adjr2), forwardmod.sum$adjr2[which.max(forwardmod.sum$adjr2)], col = "red", cex = 2, pch = 20)
+
+coef(regfit.forward,3)
+# (Intercept)           x      I(x^2)      I(x^3) 
+# 5.061507    2.975280    3.876209    7.217639 
+coef(regfit.forward,4)
+# (Intercept)           x      I(x^2)      I(x^3)      I(x^5) 
+# 5.07200775  3.38745596  3.84575641  6.75797426  0.08072292 
+
+```
+
+```{r}
+#<<<<<<<<<<<<<<<<<<<<<<BACKWARDS STEPWISE SELECTION>>>>>>>>>>>>>>>>>>>
+regfit.backward=regsubsets(y ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data=dataset,nvmax=10,method = "backward")
+backwardmod.sum=summary(regfit.backward)
+backwardmod.sum
+
+par(mfrow = c(2, 2))
+# Cp -4  vars
+plot(backwardmod.sum$cp, xlab = "Number of variables", ylab = "C_p", type = "l")
+points(which.min(backwardmod.sum$cp), backwardmod.sum$cp[which.min(backwardmod.sum$cp)], col = "red", cex = 2, pch = 20)
+# BIC --indicates 3 vars best
+plot(backwardmod.sum$bic, xlab = "Number of variables", ylab = "BIC", type = "l")
+points(which.min(backwardmod.sum$bic), backwardmod.sum$bic[which.min(backwardmod.sum$bic)], col = "red", cex = 2, pch = 20)
+# adj Rsq - 4 vars
+plot(backwardmod.sum$adjr2, xlab = "Number of variables", ylab = "Adjusted Rsq", type = "l")
+points(which.max(backwardmod.sum$adjr2), backwardmod.sum$adjr2[which.max(backwardmod.sum$adjr2)], col = "red", cex = 2, pch = 20)
+
+coef(regfit.backward,3)
+# (Intercept)           x      I(x^2)      I(x^3) 
+# 5.061507    2.975280    3.876209    7.217639 
+coef(regfit.backward,4)
+# (Intercept)           x      I(x^2)      I(x^3)      I(x^9) 
+# 5.079236362 3.231905828 3.833494180 7.019555807 0.001290827 
+```
+
+```{r, eval = F}
+#==============================PART E==========================
+# (e) Now fit a lasso model to the simulated data, again using X,X2,
+# . . . , X10 as predictors. Use cross-validation to select the optimal
+# value of λ. Create plots of the cross-validation error as a function
+# of λ. Report the resulting coefficient estimates, and discuss the
+# results obtained.
+
+x_matrix = model.matrix(y ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data = dataset)[, -1]
+lasso.model=glmnet(x_matrix,y,alpha=1,lambda = grid)
+#perform CV to get test error
+set.seed(1)
+crossval.out=cv.glmnet(x_matrix,y,alpha=1)
+plot(crossval.out)
+#lambda between -2.1 and -1.5
+bestlambda=crossval.out$lambda.min
+bestlambda
+# [1] 0.1213782
+lasso.prediction=predict(lasso.model,s=bestlambda,newx = x_matrix)
+#mean((lasso.prediction-y.test)^2)
+output=glmnet(x_matrix,y,alpha=1,lambda = grid)
+lasso.coefficient=predict(output,type="coefficients", s=bestlambda)[1:10,]
+lasso.coefficient
+# (Intercept)            x       I(x^2)       I(x^3)       I(x^4)       I(x^5)       I(x^6)       I(x^7)       I(x^8) 
+# 5.221140e+00 3.033995e+00 3.573236e+00 7.065246e+00 4.755177e-02 1.139770e-02 0.000000e+00 1.880960e-03 0.000000e+00 
+# I(x^9) 
+# 6.309071e-05 
+lasso.coefficient[lasso.coefficient!=0]
+# (Intercept)            x       I(x^2)       I(x^3)       I(x^4)       I(x^5)       I(x^7)       I(x^9) 
+# 5.221140e+00 3.033995e+00 3.573236e+00 7.065246e+00 4.755177e-02 1.139770e-02 1.880960e-03 6.309071e-05 
+```
+
+```{r}
+#======================ques 8, PART F==========================
+# (f) Now generate a response vector Y according to the model
+# Y = β0 + β7X7 + ϵ,
+# and perform best subset selection and the lasso. Discuss the
+# results obtained.
+set.seed(1)
+x <- rnorm(100)
+epsilon <- rnorm(100)
+
 b0 <- 5
-b1 <- 4
-b2 <- 3
-b3 <- 2
-y <- b0 + b1*x + b2*x^2 + b3*x^3 + noise
+b7 <- 7
+y <- b0 + b7 * x^7 + epsilon
+
+data.abbrev.set <- data.frame(y = y, x = x)
+summary(data.abbrev.set)
+#nvmax - largest subset size to examine
+#regfit.abbrev=regsubsets(y ~ x + I(x^7), data=data.abbrev.set,nvmax=10) #not sure about this line
+regfit.abbrev=regsubsets(y ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data=data.abbrev.set,nvmax=10)
+abbrevmod.sum=summary(regfit.abbrev)
+names(abbrevmod.sum)
+abbrevmod.sum$rsq
+par(mfrow=c(2,2))
+plot(abbrevmod.sum$rss,xlab="number of variables", ylab="RSS",type="l")
+plot(abbrevmod.sum$adjr2,xlab="Number of variables", ylab="Adjusted Rsq",type = "l")
+which.max(abbrevmod.sum$adjr2)
+points(1,abbrevmod.sum$adjr2[1], col="red",cex=2,pch=20)
+
+plot(abbrevmod.sum$cp,xlab="number of variables",ylab="Cp", type="l")
+which.min(abbrevmod.sum$cp)
+points(1,abbrevmod.sum$cp[1],col="red",cex=2,pch=20)
+plot(abbrevmod.sum$bic,xlab="Number of variables",ylab="BIC",type = "l")
+points(which.min(abbrevmod.sum$bic), abbrevmod.sum$bic[which.min(abbrevmod.sum$bic)],col="red",cex=2,pch=20)
+
+plot(regfit.abbrev,scale="r2")
+plot(regfit.abbrev,scale="adjr2")
+plot(regfit.abbrev,scale = "Cp")
+plot(regfit.abbrev,scale="bic")
+
+#coefficients for 1 variable model -- results don't make sense
+coef(regfit.fullmodel,1)
+# clearly not right
+# (Intercept)      I(x^3) 
+# 8.279046    8.396432
+coef(regfit.fullmodel,2)
+# (Intercept)      I(x^2)      I(x^3) 
+# 5.319997    3.740657    8.050129 
+coef(regfit.fullmodel,3)
+# (Intercept)           x      I(x^2)      I(x^3) 
+# 5.061507    2.975280    3.876209    7.217639 
+
+#lasso - results make sense
+x_matrix <- model.matrix(y ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data = data.abbrev.set)[, -1]
+crossv.lasso <- cv.glmnet(x_matrix, y, alpha = 1)
+best_lamd <- crossv.lasso$lambda.min
+best_lamd
+lasso.modl <- glmnet(x_matrix, y, alpha = 1)
+lasso.coeffs=predict(lasso.modl, s = best_lamd, type = "coefficients")[1:11, ]
+lasso.coeffs
+lasso.coeffs[lasso.coeffs!=0]
+# (Intercept)      I(x^7) 
+# 5.904188    6.776797 
 ```
 
-(c) Use the regsubsets() function to perform best subset selection in order to choose the best model containing the predictors X,X2,...,X10. What is the best model obtained according to Cp, BIC, and adjusted R2? Show some plots to provide evidence for your answer, and report the coefficients of the best model obtained. Note you will need to use the data.frame() function to create a single data set containing both X and Y .
-
-We first create a dataframe to contain x and y.
-```{r}
-data1 <- data.frame(y = y,x = x)
-```
-
-We have loaded the leaps library at the top and can use it to run subset selection with regsubsets and store the summary as f.e.
-```{r}
-fit.exh <- regsubsets(y ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data = data1, nvmax = 10)
-f.e <- summary(fit.exh)
-```
-
-We plot the summary to compare different criteria. 
-```{r}
-par(mfrow = c(3,1))
-plot(f.e$cp, xlab="Number of predictors", 
-     ylab="cp", col="red", type="p", pch=16)
-plot(f.e$bic, xlab="Number of predictors", 
-     ylab="bic", col="blue", type="p", pch=16)
-plot(f.e$adjr2, xlab="Number of predictors", 
-     ylab="adjr2", col="green", type="p", pch=16)
-```
-In the cp and bic plots, we look for the number of variables with smallers or nearlly smallest $C_p$'s and $BIC$'s. The plots show that 3-variables is optimal according to the $C_p$ and $BIC$ criteria.
-In the adjusted r plot, we look for the number of variables that maximizes or nearly maximizees $adjr2$. The plot shows that we achieve this at 3 variables. Therefore, we conclude that we can use 3-variable models.
-
-With 3 variables, we have the follow coefficients:
-```{r}
-coef(fit.exh,3)
-```
-Our final model of 3 variables (x, x^2, x^3) are as follows.
-All variables have coefficients different from 0 at the 0.05 significance level.
-```{r}
-fit.final <- lm(y ~ x + I(x^2) + I(x^3), data1)
-summary(fit.final)
-```
-
-(d) Repeat (c), using forward stepwise selection and also using back- wards stepwise selection. How does your answer compare to the results in (c)?
-
-We will first run regsubsets with forward stepwise selection.
-```{r}
-fit.forward <- regsubsets(y ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data = data1, nvmax = 10, method = "forward")
-f.f <- summary(fit.forward)
-```
-We plot the summary to compare different criteria. 
-```{r}
-par(mfrow = c(3,1))
-plot(f.f$cp, main="Forward Selection", xlab="Number of predictors", 
-     ylab="cp", col="red", type="p", pch=16)
-plot(f.f$bic, main="Forward Selection", xlab="Number of predictors", 
-     ylab="bic", col="blue", type="p", pch=16)
-plot(f.f$adjr2, main="Forward Selection", xlab="Number of predictors", 
-     ylab="adjr2", col="green", type="p", pch=16)
-```
-
-In the cp and bic plots, we look for the number of variables with smallers or nearlly smallest $C_p$'s and $BIC$'s. The plots show that 3-variables is optimal according to the $C_p$ and $BIC$ criteria.
-In the adjusted r plot, we look for the number of variables that maximizes or nearly maximizees $adjr2$. The plot shows that we achieve this at 3 variables. Therefore, we conclude that we can use 3-variable models.
-
-With 3 variables, we have the follow coefficients. 
-```{r}
-coef(fit.forward,3)
-```
-Our final model of 3 variables (x, x^2, x^3) are as follows: 
-All variables have coefficients different from 0 at the 0.05 significance level.
-```{r}
-fit.finalforward <- lm(y ~ x + I(x^2) + I(x^3), data1)
-summary(fit.finalforward)
-```
-
-We will now run regsubsets with backward stepwise selection.
-```{r}
-fit.backward <- regsubsets(y ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data = data1, nvmax = 10, method = "backward")
-f.b <- summary(fit.backward)
-```
-We plot the summary to compare different criteria. 
-```{r}
-par(mfrow = c(3,1))
-plot(f.b$cp, main="Backward Selection", xlab="Number of predictors", 
-     ylab="cp", col="red", type="p", pch=16)
-plot(f.b$bic, main="Backward Selection", xlab="Number of predictors", 
-     ylab="bic", col="blue", type="p", pch=16)
-plot(f.b$adjr2, main="Backward Selection", xlab="Number of predictors", 
-     ylab="adjr2", col="green", type="p", pch=16)
-```
-
-In the cp and bic plots, we look for the number of variables with smallers or nearlly smallest $C_p$'s and $BIC$'s. The plots show that 3-variables is optimal according to the $C_p$ and $BIC$ criteria.
-In the adjusted r plot, we look for the number of variables that maximizes or nearly maximizees $adjr2$. The plot shows that we achieve this at 3 variables. Therefore, we conclude that we can use 3-variable models.
-
-With 3 variables, we have the follow coefficients. 
-```{r}
-coef(fit.backward,3)
-```
-Our final model of 3 variables (x, x^2, x^3) are as follows: 
-All variables have coefficients different from 0 at the 0.05 significance level.
-```{r}
-fit.finalbackward <- lm(y ~ x + I(x^2) + I(x^3), data1)
-summary(fit.finalbackward)
-```
-
-
-(e) Now fit a lasso model to the simulated data, again using X,X2, . . . , X 10 as predictors. Use cross-validation to select the optimal value of λ. Create plots of the cross-validation error as a function of λ. Report the resulting coefficient estimates, and discuss the results obtained.
-
-We first prepare the input x matrix for glmnet.
-```{r}
-X <- model.matrix(y ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data = data1)[, -1]
-```
-We can run cv.glmnet with X and y and plot the results.
-```{r}
-fit.cv <- cv.glmnet(X, y, alpha = 1, nfolds = 10) 
-plot(fit.cv)
-```
-
-Using lamdba.min as the optimal value of λ, we find it to be 0.07087723. This corresponds to 6 non-zero betas
-```{r}
-minlambda <- fit.cv$lambda.min
-minlambda
-```
-
-The 6 non-zero betas are "x", "I(x^2)", "I(x^3)", "I(x^4)", "I(x^5)", "I(x^7)" with coefficients shown below:
-```{r}
-coef.min <- coef(fit.cv, s="lambda.min")  
-coef.min <- coef.min[which(coef.min !=0),]   # get the non=zero coefficients
-coef.min  # set of predictors chosen and their coefficients
-```
-
-Now that we know which coefficients to use, we prepare a lm formulae for the fit model.
-```{r}
-var.min <- rownames(as.matrix(coef.min)) # output the names of non-zero coefficients
-lm.input <- as.formula(paste("y", "~", paste(var.min[-1], collapse = "+"))) # prepare for lm fomulae
-lm.input
-```
-
-We can then fit the linear model with LASSO output variables.
-```{r}
-fit.min.lm <- lm(lm.input, data=data1)
-lm.output <- coef(fit.min.lm) # output lm estimates
-summary(fit.min.lm)
-```
-
-In summary, through Lasso estimation, we find an optimal λ (lambda.min) that corresponds to 6 non-zero coefficients. After fitting a linear model with these 6 coefficients, our final model has R-squared of 0.9909 with 3 of the 6 coefficients being significant at the 0.05 level.
-
-(f) Now generate a response vector Y according to the model Y = β0 + β7X7 + ε,
-and perform best subset selection and the lasso. Discuss the results obtained.
-
-We'll first perform best subset selection.
-```{r}
-b7 <- 3
-y2 <- b0 + b7*x^7 + noise
-```
-
-(c) Use the regsubsets() function to perform best subset selection in order to choose the best model containing the predictors X,X2,...,X10. What is the best model obtained according to Cp, BIC, and adjusted R2? Show some plots to provide evidence for your answer, and report the coefficients of the best model obtained. Note you will need to use the data.frame() function to create a single data set containing both X and Y .
-
-We first create a dataframe to contain x and y. Since we have loaded leaps library above, we won't load it again.
-```{r}
-data2 <- data.frame(y=y2, x=x)
-```
-
-We can then run subset selection with regsubsets and store the summary as f.e.
-```{r}
-fit.exh2 <- regsubsets(y2 ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data=data1, nvmax=10)
-f.e2 <- summary(fit.exh2)
-```
-
-We plot the summary to compare different criteria. 
-```{r}
-par(mfrow = c(3, 1))
-plot(f.e2$cp, xlab="Number of predictors", 
-     ylab="cp", col="red", type="p", pch=16)
-plot(f.e2$bic, xlab="Number of predictors", 
-     ylab="bic", col="blue", type="p", pch=16)
-plot(f.e2$adjr2, xlab="Number of predictors", 
-     ylab="adjr2", col="green", type="p", pch=16)
-```
-The CP critierion is minimized at 2 variables.
-The BIC critierion is minimized at 1 variable.
-The adjr2 critierion is nearly maximized at 3 variables. 
-
-With 2 variables ($C_p$ model), the variables used are x^2 and x^7 with cofficients as follows:
-```{r}
-coef(fit.exh2,2)
-```
-With 1 variable ($BIS$ model), the variable used is x^7 with cofficient as follows:
-```{r}
-coef(fit.exh2,1)
-```
-With 3 variables ($adjr2$ model), the variables used are x^2, x^5, x^7 with cofficients as follows:
-```{r}
-coef(fit.exh2,3)
-```
-
-When we run fit linear models for each of the models and study their summaries.
-```{r}
-fit2.cp <- lm(y2 ~ I(x^2) + I(x^7), data2)
-fit2.bic <- lm(y2 ~ I(x^7), data2)
-fit2.adjr2 <- lm(y2 ~ I(x^2) +  I(x^5) + I(x^7) , data2)
-summary(fit2.cp)
-summary(fit2.bic)
-summary(fit2.adjr2)
-```
-
-Through the lm summaries, we see that both the $C_p$ and $adjr2$ models have insignificant variables at the 0.05 level. They also returns similar R-squared values as the $BIC$ model. However, the $BIC$ model outshines them in that it does not have any insignificant varaibles. Given this, I would feel comfortable selecting the $BIC$ model of 1 variable as the best model for this data.
-
-We will now fit the lasso model. 
-
-We first prepare the input x matrix for glmnet.
-```{r}
-X3 <- model.matrix(y2 ~ x + I(x^2) + I(x^3) + I(x^4) + I(x^5) + I(x^6) + I(x^7) + I(x^8) + I(x^9) + I(x^10), data=data2)[, -1]
-```
-We can run cv.glmnet with X and y and plot the results.
-```{r}
-fit.cv2 <- cv.glmnet(X3, y2, alpha=1, nfolds=10) 
-plot(fit.cv2)
-```
-
-Using lamdba.min as the optimal value of λ, we find it to be 5.818618 and log(lambda.min) of 1.761063. This corresponds to 1 non-zero beta.
-```{r}
-minlambda2 <- fit.cv2$lambda.min
-minlambda2
-```
-
-The non-zero beta is "I(x^7)". The coefficients are shown below:
-```{r}
-coef.min2 <- coef(fit.cv2, s="lambda.min")  
-coef.min2 <- coef.min2[which(coef.min2 !=0),]   # get the non=zero coefficients
-coef.min2  # set of predictors chosen and their coefficients
-```
-
-Now that we know which coefficient to use, we prepare a lm formulae for the fit model.
-```{r}
-var.min2 <- rownames(as.matrix(coef.min2)) # output the names of non-zero coefficients
-lm.input2 <- as.formula(paste("y", "~", paste(var.min2[-1], collapse = "+"))) # prepare for lm fomulae
-lm.input2
-```
-
-We can then fit the linear model with LASSO output variables.
-```{r}
-fit.min.lm2 <- lm(lm.input2, data=data2)
-lm.output2 <- coef(fit.min.lm2) # output lm estimates
-summary(fit.min.lm2)
-```
-
-In summary, through Lasso estimation, we find an optimal λ (lambda.min) that corresponds to 1 non-zero coefficients (x^7). After fitting a linear model with this coefficient, our final model has R-squared of 1 with the x^7 coefficient being significant at the 0.05 level.
 
 ## Problem 2: Regularization
 
@@ -517,15 +467,8 @@ data.frame(name = tmp_coeffs@Dimnames[[1]][tmp_coeffs@i + 1], coefficient = tmp_
 
 ```{r results='hide'}
 #=========================using a set of λ========================
-attach(data3)
-# names(data3)
 Y <- data3$violentcrimes.perpop # extract Y
-
-# rows.names <- names(data3)
-# lm.input <- as.formula(paste("violentcrimes.perpop", "~", paste(var.min[-1], collapse = "+"))) 
-# lm.input
-
-X <- model.matrix(violentcrimes.perpop~., data=data3)[, -99]
+X <- model.matrix(violentcrimes.perpop~., data=data3)[, -1]
 fit.lambda <- glmnet(X, Y, alpha=1)
 str(fit.lambda)
 fit.lambda$lambda
@@ -606,7 +549,7 @@ lm.input.lambda1se
 
 __2. What is the model after running OLS?__
 
-##### Model after running OLS using lambda.min:
+##### Using lambda.min:
 
 ```{r}
 comp
@@ -742,80 +685,46 @@ We took the `lm()` inputs obtained from LASSO and then performed model selection
 
 __1. What is your final elastic net model? What were the alpha and lambda values? What is the prediction error?__
 
-```{r}
+```{r, eval=FALSE, include=FALSE}
 Y <- data3$violentcrimes.perpop # extract Y
 X <- model.matrix(violentcrimes.perpop~., data=data3)[, -1]
 # now set alpha close to 1 so it does feature selection yet still benefits from Ridge Regression (comp. cheap, best in situations where least sq. estimates
 # have high variance)
 fit.elasnet.lambda <- glmnet(X, Y, alpha=.99) 
-fit.elasnet.cv <- cv.glmnet(X, Y, alpha=.99, nfolds=10)  # using 10 folds to get best λ
-plot(fit.elasnet.cv$lambda) #plot all λ values used
-plot(log(fit.elasnet.cv$lambda), fit.elasnet.cv$cvm, xlab="log(lambda)", ylab="mean cv errors",pch=16, col="red") 
-#cvm decreases till log(lambda)=~4.5 then sharply increases
-plot(fit.elasnet.cv$lambda, fit.elasnet.cv$cvm, xlab="lambda", ylab="mean cv errors",
-     pch=16, col="red")
-#λ decreases initially, stays level until λ = 100 then begins increasing
-# find minimizer of λ 
+fit.elasnet.cv <- cv.glmnet(X, Y, alpha=.99, nfolds=10)  
+plot(fit.elasnet.cv)
 fit.elasnet.cv$lambda.min
 fit.elasnet.cv$lambda.1se
-
+#log(λ_min)=~1.2, log(λ_1se)=~4.9
 set.seed(10)
-# use appropriate minimizer of λ found via CV -- cv.glmnet 
-lambda.manual <- 50
-fit.final <- glmnet(X, Y, alpha=.99, lambda=lambda.manual)  # final elastic net fit
-# names(fit.final)
+l.min <- fit.elasnet.cv$lambda.min
+l.min # log(λ_min)=3.389204 ==> λ_min=29.642347 ??
+l.1se <- fit.elasnet.cv$lambda.1se
+l.1se # log(λ_1se)=140.0423 ???
+
+
+## THIS NEEDS TO BE CHANGED WHEN APPROPRIATE LAMBDA FOUND VIA CROSS-VALIDATION-- CV.GLMNET
+set.seed(10)
+fit.final <- glmnet(X, Y, alpha=.99, lambda=70)  # final elastic net fit
 beta.final <- coef(fit.final)
 beta.final <- beta.final[which(beta.final !=0),]
 beta.final <- as.matrix(beta.final)
 rownames(beta.final)
 #get variables in appropriate format to perform lm()
 variables <- rownames(as.matrix(beta.final))
-lm.input5 <- as.formula(paste("violentcrimes.perpop", "~", paste(variables[-1], collapse = "+"))) 
-lm.input5
-lm.final=lm(lm.input5,data3)
+lm.input <- as.formula(paste("violentcrimes.perpop", "~", paste(variables[-1], collapse = "+"))) 
+lm.input
+lm.final=lm(lm.input,data3)
 summary(lm.final)
 
 ```
 
-#### Final elastic net model
 
-```{r}
-lm.input5
-print("Prediction error:")
-fit.elasnet.cv$cvm[lambda.manual]
-print("Alpha = .99, lambda = 50")
-```
 
 __2. Use the elastic net variables in an OLS model. What is the equation, and what is the prediction error.__
 
-```{r}
-print("Equation:")
-lm.input5
-lm.final=lm(lm.input5,data3)
-print("Prediction error: 364")
-summary(lm.final)
-```
-
 __3. Summarize your findings, with particular focus on the difference between the two equations.__
  
-```{r}
-#coefs <- coef(fit.elasnet.cv, s=lambda.manual)
-# coefs <- coef(fit.final, s=lambda.manual)
-# coefs <- coefs[which(coef.min !=0),]
-print("Elastic net equation:")
-variables
-# coefs
-fit.min.lm2 <- lm(lm.input5, data=data3)
-lm.output2 <- coef(fit.min.lm2) # output lm estimates
-print("Linear model equation:")
-lm.output2
-summary(fit.min.lm2) 
-# comp2 <- data.frame(coefs, lm.output2)
-# names(comp2) <-c("estimates from LASSO", "lm estimates")
-# comp2
-```
-
-As we can see the prediction error is much lower in the OLS model as opposed to the elastic net model.
 
 **B+)** __Repeat similar stepts as that of **B)** but start with the set of variables that also include all two way interactions__
 

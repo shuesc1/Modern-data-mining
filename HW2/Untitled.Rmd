@@ -1,0 +1,111 @@
+---
+title: "Hw2_ques3-ii"
+author: "Joseph Haymaker"
+date: "10/10/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+
+**C)** __Now, instead of Lasso, we want to consider how changing the value of alpha (i.e. mixing between Lasso and Ridge) will affect the model. Cross-validate between alpha and lambda, instead of just lambda. Note that the final model may have variables with p-values higher than 0.05; this is because we are optimizing for accuracy rather than parsimoniousness.__
+
+__1. What is your final elastic net model? What were the alpha and lambda values? What is the prediction error?__
+
+```{r}
+Y <- data3$violentcrimes.perpop # extract Y
+X <- model.matrix(violentcrimes.perpop~., data=data3)[, -1]
+# now set alpha close to 1 so it does feature selection yet still benefits from Ridge Regression (comp. cheap, best in situations where least sq. estimates
+# have high variance)
+fit.elasnet.lambda <- glmnet(X, Y, alpha=.99) 
+fit.elasnet.cv <- cv.glmnet(X, Y, alpha=.99, nfolds=10)  # using 10 folds to get best λ
+plot(fit.elasnet.cv$lambda) #plot all λ values used
+plot(log(fit.elasnet.cv$lambda), fit.elasnet.cv$cvm, xlab="log(lambda)", ylab="mean cv errors",pch=16, col="red") 
+#cvm decreases till log(lambda)=~4.5 then sharply increases
+plot(fit.elasnet.cv$lambda, fit.elasnet.cv$cvm, xlab="lambda", ylab="mean cv errors",
+     pch=16, col="red")
+#λ decreases initially, stays level until λ = 100 then begins increasing
+# find minimizer of λ 
+fit.elasnet.cv$lambda.min
+fit.elasnet.cv$lambda.1se
+
+set.seed(10)
+# use appropriate minimizer of λ found via CV -- cv.glmnet 
+lambda.manual <- 50
+fit.final <- glmnet(X, Y, alpha=.99, lambda=lambda.manual)  # final elastic net fit
+# names(fit.final)
+beta.final <- coef(fit.final)
+beta.final <- beta.final[which(beta.final !=0),]
+beta.final <- as.matrix(beta.final)
+rownames(beta.final)
+#get variables in appropriate format to perform lm()
+variables <- rownames(as.matrix(beta.final))
+lm.input5 <- as.formula(paste("violentcrimes.perpop", "~", paste(variables[-1], collapse = "+"))) 
+lm.input5
+lm.final=lm(lm.input5,data3)
+summary(lm.final)
+
+```
+
+#### Final elastic net model
+
+```{r}
+lm.input5
+print("Prediction error:")
+fit.elasnet.cv$cvm[lambda.manual]
+print("Alpha = .99, lambda = 50")
+```
+
+__2. Use the elastic net variables in an OLS model. What is the equation, and what is the prediction error.__
+
+```{r}
+print("Equation:")
+lm.input5
+lm.final=lm(lm.input5,data3)
+print("Prediction error: 364")
+summary(lm.final)
+```
+
+__3. Summarize your findings, with particular focus on the difference between the two equations.__
+
+```{r}
+#coefs <- coef(fit.elasnet.cv, s=lambda.manual)
+# coefs <- coef(fit.final, s=lambda.manual)
+# coefs <- coefs[which(coef.min !=0),]
+print("Elastic net equation:")
+variables
+# coefs
+fit.min.lm2 <- lm(lm.input5, data=data3)
+lm.output2 <- coef(fit.min.lm2) # output lm estimates
+print("Linear model equation:")
+lm.output2
+summary(fit.min.lm2) 
+# comp2 <- data.frame(coefs, lm.output2)
+# names(comp2) <-c("estimates from LASSO", "lm estimates")
+# comp2
+```
+
+As we can see the prediction error is much lower in the OLS model as opposed to the elastic net model.
