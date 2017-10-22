@@ -565,7 +565,7 @@ coef.min
 rownames(as.matrix(coef.min))
 #using LASSO variables to fit an lm() model
 var.min <- rownames(as.matrix(coef.min)) 
-lm.input <- as.formula(paste("violentcrimes.perpop", "~", paste(var.min[-1], collapse = "+"))) 
+lm.input <- as.formula(paste("violentcrimes.perpop", "~", paste(var.min[-99], collapse = "+"))) 
 lm.input
 
 fit.min.lm <- lm(lm.input, data=data3)

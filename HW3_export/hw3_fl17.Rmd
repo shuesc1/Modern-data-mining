@@ -1,0 +1,1039 @@
+---
+title: "Modern Data Mining - HW 3"
+author:
+- Antina Lee
+- Joey Haymaker
+- Maria Diaz Ortiz
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.height=4, fig.width=6, warning = F)
+
+# constants for homework assignments
+hw_num <- 3
+hw_due_date <- "22 October, 2017"
+```
+
+
+
+## Overview / Instructions
+
+This is homework #`r paste(hw_num)` of STAT 471/571/701. It will be **due on `r paste(hw_due_date)` by 11:59 PM** on Canvas. You can directly edit this file to add your answers. Submit the Rmd file, a PDF or word or HTML version with only 1 submission per HW team.
+
+**Note:** To minimize your work and errors, we provide this Rmd file to guide you in the process of building your final report. To that end, we've included code to load the necessary data files. Make sure that the following files are in the same folder as this R Markdown file:
+
+* `FRAMINGHAM.dat`
+* `Bills.subset.csv`
+* `Bills.subset.test.csv`
+
+The data should load properly if you are working in Rstudio, *without needing to change your working directory*.
+
+Solutions will be posted. Make sure to compare your answers to and understand the solutions.
+<!---
+## R Markdown / Knitr tips
+
+You should think of this R Markdown file as generating a polished report, one that you would be happy to show other people (or your boss). There shouldn't be any extraneous output; all graphs and code run should clearly have a reason to be run. That means that any output in the final file should have explanations.
+
+A couple tips:
+
+* Keep each chunk to only output one thing! In R, if you're not doing an assignment (with the `<-` operator), it's probably going to print something.
+* If you don't want to print the R code you wrote (but want to run it, and want to show the results), use a chunk declaration like this: `{r, echo=F}`
+* If you don't want to show the results of the R code or the original code, use a chunk declaration like: `{r, include=F}`
+* If you don't want to show the results, but show the original code, use a chunk declaration like: `{r, results='hide'}`.
+* If you don't want to run the R code at all use `{r, eval = F}`.
+* We show a few examples of these options in the below example code. 
+* For more details about these R Markdown options, see the [documentation](http://yihui.name/knitr/options/).
+* Delete the instructions and this R Markdown section, since they're not part of your overall report.
+--->
+## Problem 0
+
+Review the code and concepts covered during lecture, in particular, logistic regression and classification. 
+```{r}
+#knitr::opts_chunk$set(echo = TRUE, results = "hide", fig.width=6, fig.height=4)
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+#library(pacman)
+library(bestglm)
+library(ggplot2)
+library(dplyr)
+library(leaps) 
+pacman::p_load(pROC, leaps, car, tidyverse, mapproj, caret)
+```
+
+## Problem 1
+We will continue to use the Framingham Data (`Framingham.dat`) so that you are already familiar with the data and the variables. All the results are obtained through training data.
+
+To keep our answers consistent, use a subset of the data, and exclude anyone with a missing entry. For your convenience, we've loaded it here together with a brief summary about the data.
+
+```{r data preparation, include = F}
+# Notice that we hide the code and the results here
+# Using `include=F` in the chunk declaration
+hd_data <- read.csv("Framingham.dat")
+str(hd_data) 
+
+### Renames, setting the variables with correct natures...
+names(hd_data)[1] <- "HD"
+names(hd_data)
+hd_data$HD <- as.factor(hd_data$HD)
+hd_data$SEX <- as.factor(hd_data$SEX)
+str(hd_data)
+#tail(hd_data, 1)    # The last row is for prediction
+hd_data.new <- hd_data[1407,] # The female whose HD will be predicted.
+hd_data.new
+hd_data <- hd_data[-1407,]  # take out the last row 
+hd_data.f <- na.omit(hd_data)
+```
+
+We note that this dataset contains 311 people diagnosed with heart disease and 1095 without heart disease.
+```{r table heart disease, echo = F, comment = " "}
+# we use echo = F to avoid showing this R code
+table(hd_data$HD) # HD: 311 of "0" and 1095 "1" 
+```
+
+After a quick cleaning up here is a summary about the data:
+```{r data summary, comment="     "}
+# using the comment="     ", we get rid of the ## in the output.
+summary(hd_data.f)
+```
+
+### Part 1A
+Goal: Identify important risk factors for `Heart.Disease.` through logistic regression. 
+Start a fit with just one factor, `SBP`, and call it `fit1`. Let us add one variable to this at a time from among the rest of the variables. 
+```{r, results='hide'}
+tapply(hd_data$SBP, hd_data$HD, mean)
+fit1 <- glm(HD~SBP, hd_data.f, family=binomial)
+summary(fit1)
+fit1.1 <- glm(HD~SBP + AGE, hd_data.f, family=binomial)
+summary(fit1.1)
+fit1.2 <- glm(HD~SBP + SEX, hd_data.f, family=binomial)
+summary(fit1.2)
+fit1.3 <- glm(HD~SBP + DBP, hd_data.f, family=binomial)
+summary(fit1.3)
+fit1.4 <- glm(HD~SBP + CHOL, hd_data.f, family=binomial)
+summary(fit1.4)
+fit1.5 <- glm(HD~SBP + DBP, hd_data.f, family=binomial)
+summary(fit1.5)
+fit1.6 <- glm(HD~SBP + FRW, hd_data.f, family=binomial)
+summary(fit1.6)
+fit1.7 <- glm(HD~SBP + CIG, hd_data.f, family=binomial)
+summary(fit1.7)
+```
+i. Which single variable would be the most important to add? Add it to your model, and call the new fit `fit2`.  
+
+We will pick up the variable either with highest $|z|$ value, or smallest $p$ value. From all the two variable models we see that `SEX` will be the most important addition on top of the SBP. And here is the summary report.
+```{r the most important addition, results='asis', comment="   "}
+## How to control the summary(fit2) output to cut some junk?
+## We could use packages: xtable or broom. 
+#install.packages("xtable")
+library(xtable)
+options(xtable.comment = FALSE)
+fit2 <- glm(HD~SBP + SEX, hd_data.f, family=binomial)
+xtable(fit2)
+```
+ii. Is the residual deviance of `fit2` always smaller than that of `fit1`? Why or why not?
+  
+It will always be smaller, since fit 2 contains the variables in fit 1 (so similar to RSS, it goes down as you add more variables). 
+  
+iii. Perform both the Wald test and the Likelihood ratio tests (Chi-Squared) to see if the added variable is significant at the .01 level.  What are the p-values from each test? Are they the same? 
+
+The following code performs the Wald and Chi-Squared Tests:
+```{r, results='hide'}
+#Wald Test/Intervals
+summary(fit2)
+confint.default(fit2)
+#pval for SEXMALE = 1.02e-10
+#CI's for SEXMALE = [0.62949139 1.17734896]
+#Added variable is significant at the 0.01 level
+
+#Chi-Squared Test
+anova(fit2, test="Chisq")
+#pval for SEXMALE = 3.828e-11
+#Added variable is significant at the 0.01 level
+```
+The p-value for SEXMALE obtained by Wald is 1.02e-10, whereas the p-value for SEXMALE obtained by Chi-Square is 3.828e-11. Although they are not the same, they are both significant at the alpha = 0.01 level.
+
+### Part 1B -  Model building
+
+Start with all variables. Our goal is to fit a well-fitting model, that is still small and easy to interpret (parsimonious).
+
+i. Use backward selection method. Only keep variables whose coefficients are significantly different from 0 at .05 level. Kick out the variable with the largest p-value first, and then re-fit the model to see if there are other variables you want to kick out.
+
+We start by fitting the full model:
+```{r, results='hide'}
+names(hd_data.f)
+fit.full <- glm(HD ~ SBP + SEX + AGE + DBP + CHOL + FRW + CIG, hd_data.f, family=binomial)
+```
+
+Use the summary to identify the variable with the largest p-value:
+```{r, results='hide'}
+summary(fit.full)
+```
+The variable with the largest p-value was DBP (pval = 0.705941).
+
+Kick it out, fit the model again and use the summary to identify the variable with the largest p-value:
+```{r}
+fit.sans.BDP <- glm(HD ~ SBP + AGE + SEX + CHOL + FRW + CIG, hd_data.f, family=binomial)
+summary(fit.sans.BDP)
+```
+The variable with the largest p-value is now FRW (pval = 0.13151 ).
+
+Kick it out and repeat:
+```{r, results = 'hide'}
+fit.sans.DBP.FRW <- glm(HD ~ SBP + AGE + SEX + CHOL + CIG, hd_data.f, family=binomial)
+summary(fit.sans.DBP.FRW)
+```
+The variable with the largest p-value is now CIG (pval = 0.06083).
+
+Kick it out and repeat:
+```{r,results = 'hide'}
+fit.sans.DBP.FRW.CIG <- glm(HD ~ SBP + AGE + SEX + CHOL, hd_data.f, family=binomial)
+summary(fit.sans.DBP.FRW.CIG)
+```
+
+All variables are now significant at the alpha = 0.01 level. Therefore, the final model along with the summary statisitcs are provided below. The model includes HD as a function of SBP, SEX, and CHOL.
+```{r}
+fit.bw <- glm(HD ~ SBP + AGE + SEX + CHOL, hd_data.f, family=binomial)
+summary(fit.bw)
+```
+
+The probability of heart disease as predicted by this model is given by the following equation:
+$$P(HD = 1) = \frac{e^{-8.409 + 0.017 \times SBP + 0.057 \times AGE + 0.990 I_{Male} + 0.004 \times CHOL}}{1 + {e^{-8.409 + 0.017 \times SBP + 0.057 \times AGE + 0.990 I_{Male} + 0.004 \times CHOL}}}$$
+
+ii. Use AIC as the criterion for model selection. Find a model with small AIC through exhaustive search. Does exhaustive search  guarantee that the p-values for all the remaining variables are less than .05? Is our final model here the same as the model from backwards elimination? 
+
+The code to perform exhaustive search using AIC as the criteria is provided below. First, one must format the data to be used as input to the bestglm function:
+```{r}
+Xy <- model.matrix(HD ~.+0, hd_data.f) 
+Xy <- data.frame(Xy, hd_data.f$HD)
+```
+
+Use bestglm to run exhaustive search:
+```{r, results='hide'}
+fit.exh <- bestglm(Xy, family = binomial, method = "exhaustive", IC="AIC", nvmax = 10)
+```
+
+Top 5  best models by AIC are listed below:
+```{r}
+fit.exh$BestModels
+```
+
+The final model provided by this algorithm is:
+```{r}
+fit.exh$BestModel
+```
+
+Through exhaustive search using AIC as criteria, the probability of HD can be modeled by the following function:
+$$P(HD = 1) = \frac{e^{-9.228 + 0.062 \times AGE + 0.911 I_{Male} + 0.016 \times SBP + 0.004 \times CHOL + 0.006 \times FRW + 0.012 \times CIG}}{1 + {e^{-9.228 + 0.062 \times AGE + 0.911 I_{Male} + 0.016 \times SBP + 0.004 \times CHOL + 0.006 \times FRW + 0.012 \times CIG}}}$$
+
+As you can see, this is NOT the same function we obtain from backwards selection. In addition, exhaustive search does NOT guarantee that all the p-values will be significant at the 0.01 level. We can use the following code to determine the p-values for the coefficients provided by this method:
+```{r}
+fit.exh <- glm(HD ~ SBP + AGE + SEX + CHOL + FRW + CIG, hd_data.f, family=binomial)
+summary(fit.exh)
+```
+As you can see from the summary above, the coefficient for FRW is not significant at the alpha = 0.01 level.
+
+iii. Use the model chosen from part ii. as the final model. Write a brief summary to describe important factors relating to Heart Diseases (i.e. the relationships between those variables in the model and heart disease). Give a definition of “important factors”. 
+
+- According to the model identified in part ii, the factors that significantly increase your risk of heart disease include the following:
+    1) SBP or systolic blood pressure
+    2) Age
+    3) Male sex
+    4) Cholesterol
+    5) Cigarette smoking
+- The coefficients can be interpreted in the following manner:
+    For example, a 10 point increase in SBP corresponds to a 0.16 increase inthe log (Odds ratio) of HD
+- Although the model also includes FRW or weight as a predictor of heart disease, because the p-value for it's coefficient is greater than alpha = 0.01 level, we do not have any evidence to claim that it has a significant impact on increasing risk of HD.
+
+
+### Part 1C - Prediction
+Liz is a patient with the following readings: `AGE=50, GENDER=FEMALE, SBP=110, DBP=80, CHOL=180, FRW=105, CIG=0`. What is the probability that she will have heart disease, according to our final model?
+
+First, create a data frame for Liz:
+```{r}
+AGE <- 50
+SEX <- 'FEMALE'
+SBP <- 110
+DBP <- 80
+CHOL <- 180
+FRW <- 105
+CIG <- 0
+liz <- data.frame(AGE, SEX, SBP, DBP, CHOL, FRW, CIG)
+```
+
+Now, use fit.exh to do prediction:
+```{r}
+fit.exh.predict <- predict(fit.exh, liz, type="response")
+fit.exh.predict
+```
+
+Therefore, the probability that Liz has heart disease or P(HD = 1) based on our model is less than 5%.
+
+### Part 2 - Classification analysis
+
+a. Display the ROC curve using `fit1`. Explain what ROC reports and how to use the graph. Specify the classifier such that the False Positive rate is less than .1 and the True Positive rate is as high as possible.
+
+The ROC curve for fit1 is displayed below:
+```{r}
+fit1.roc <- roc(hd_data.f$HD, fit1$fitted, plot=T, col="blue")
+#fit1.roc <- roc(hd_data.f$HD, fit1, plot=T, col="blue")
+```
+- The ROC reports how well your classifier does at predicting \hat y\. The y-axis contains sensitivity (or true positive rate), whereas in this case, the x-axis contains specificity (or true negatve rate), and the blue line represents the tradeoff between the two for your classifier. 
+- One can use the ROC curve to determine a threshold for your classifier. For example, let's say you want to select a value for your classifier SBP that would yield a false positive (FP) rate of 0.10. In this case, you go to specificity = 0.9 on your x-axis and can follow the blue line to deterimne the corresponding true positive (TP) rate for your model.
+- If we were to specify our classifier such that FP < 0.1 an TP is as high as possible:
+```{r}
+# Select thresholds where FP rate or 1-specificity is < 0.1 
+var1 <- fit1.roc$thresholds[1-fit1.roc$specificities < 0.1]
+var1
+
+#Out of these values, select which threshold also corresponds to maximum sensitivity or TP rate
+var2 <- var1[which.max(fit1.roc$sensitivities)]
+var2    #Threshold is P(Yhat = 1) > 0.2982114
+
+#Now, predict the performance of your model
+fit1.1 <- rep("0", 1406)   # prediction step 1: set up all values to be "0"
+fit1.1[fit1$fitted > var2] <- "1"  # prediction step 2 to get a classifier
+fit1.1 <- as.factor(fit1.1) # make this \hat y
+fit1.1 <- ifelse(fit1$fitted > var2, "1", "0")  # alternative way to assign \hat y
+
+#Make a confusion table
+cm.1 <- table(fit1.1, hd_data.f$HD) # confusion matrix: 
+cm.1
+
+#FP Rate (1 - specificity)
+spec.1 <- cm.1[1,1]/sum(hd_data.f$HD == 0)
+FP.1 <- 1-spec.1
+FP.1                           #FP Rate = 0.098
+
+#TP Rate (sensitivity)
+sens.1 <- cm.1[2,2]/sum(hd_data.f$HD == 1)
+sens.1                         #TP Rate = 0.215
+```
+The threshold value identified was P(\hat Y = 1) > 0.2982114, which yields a TP rate or sensitivity of 21.5% and a FP rate or 1-specificity of 9.8%
+
+b. Overlay two ROC curves: one from `fit1`, the other from `fit2`. Does one curve always contain the other curve? Is the AUC of one curve always larger than the AUC of the other one? Why or why not?
+
+First, we find the ROC for fit2:
+```{r, results = 'hide'}
+fit2.roc <- roc(hd_data.f$HD, fit2$fitted, plot=T, col="blue")
+```
+
+Next, we plot fit1 in bue and fit2 in red:
+```{r}
+plot(1-fit1.roc$specificities, fit1.roc$sensitivities, col="blue", pch=16, cex=.7, 
+     xlab="False Positive", 
+     ylab="Sensitivity")
+points(1-fit2.roc$specificities, fit2.roc$sensitivities, col="red", pch=16, cex=.7)
+title("Blue curve is for fit1 and red for fit2")
+```
+As we can see, fit2's AUC contains fit1's AUC. The AUC for fit2 always contains the AUC for fit1 because it includes the variables contained in fit1.
+
+c. Estimate the Positive Prediction Values and Negative Prediction Values for `fit1` and `fit2` using .5 as a threshold. Which model is more desirable if we prioritize the Positive Prediction values?
+
+To estimate the positive and negative predictive values for fit1 and fit2 with a threshold of 0.5, we execute the following code:
+```{r}
+#For fit1:
+fit1.5 <- rep("0", 1406)   
+fit1.5[fit1$fitted > 0.5] <- "1"  
+fit1.5 <- as.factor(fit1.5) 
+cm.1.5 <- table(fit1.5, hd_data$HD)
+pos.pred.1.5 <- cm.1.5[2, 2] / (cm.1.5[2, 1] + cm.1.5[2, 2])
+neg.pred.1.5 <- cm.1.5[1, 1] / (cm.1.5[1, 1] + cm.1.5[1, 2])
+
+#For fit2:
+fit2.5 <- rep("0", 1406)   
+fit2.5[fit2$fitted > 0.5] <- "1"  
+fit2.5 <- as.factor(fit2.5) 
+cm.2.5 <- table(fit2.5, hd_data$HD)
+pos.pred.2.5 <- cm.2.5[2, 2] / (cm.2.5[2, 1] + cm.2.5[2, 2])
+neg.pred.2.5 <- cm.2.5[1, 1] / (cm.2.5[1, 1] + cm.2.5[1, 2])
+
+#Print out desired variables
+cm.1.5
+pos.pred.1.5
+neg.pred.1.5
+cm.2.5
+pos.pred.2.5
+neg.pred.2.5
+```
+For fit1 (threshold > 0.5):
+     - Positive predictive value = 0.3000
+     - Negative predictive value = 0.7799
+For fit2 (threshold > 0.5):     
+     - Positive predictive value = 0.3889
+     - Negative predictive value = 0.7832
+     
+Thus, if we prioritize positive predictive values, fit2 would be the more desirable model.
+
+d. (Optional/extra credit) For `fit1`: overlay two curves,  but put the threshold over the probability function as the x-axis and positive prediction values and the negative prediction values as the y-axis.  Overlay the same plot for `fit2`. Which model would you choose if the set of positive and negative prediction values are the concerns? If you can find an R package to do so, you may use it directly.
+
+
+  
+### Part 3 - Bayes Rule
+Bayes rules with risk ratio $\frac{a_{10}}{a_{01}}=10$ or $\frac{a_{10}}{a_{01}}=1$. Use your final model obtained from 1 B) to build a class of linear classifiers.
+
+a. Write down the linear boundary for the Bayes classifier if the risk ratio of $a_{10}/a_{01}=10$.
+
+Given that $\frac{a_{01}}{a_{10}}=\frac{1}{10}=0.1$ and the following equation:
+$$P(Y=1 \vert x) > \frac{\frac{a_{0,1}}{a_{1,0}}}{1 + \frac{a_{0,1}}{a_{1,0}}}$$
+We obtain that:
+$$prob(Y=1 \vert x) > \frac{0.1}{(1+0.1)}=0.091$$
+$$logit > \log(\frac{0.091}{0.909})=-2.301$$
+Therefore, the linear boundary will be given by:
+$$-9.228 + 0.062 \times AGE + 0.911 I_{Male} + 0.016 \times SBP + 0.004 \times CHOL + 0.006 \times FRW + 0.012 \times CIG \geq -2.301$$
+After grouping all constants:
+$$0.062 \times AGE + 0.911 I_{Male} + 0.016 \times SBP + 0.004 \times CHOL + 0.006 \times FRW + 0.012 \times CIG \geq 6.927$$
+
+b. What is your estimated weighted misclassification error for this given risk ratio?
+
+To calculate this error, we employ the following code:
+```{r}
+fit.exh.pred.bayes <- rep("0", 1406)
+fit.exh.pred.bayes[fit.exh$fitted > .091] = "1" 
+MCE.bayes = (sum(10*(fit.exh.pred.bayes[hd_data$HD == "1"] != "1")) 
+           + sum(fit.exh.pred.bayes[hd_data$HD == "0"] != "0"))/length(hd_data$HD)
+MCE.bayes
+```
+Thus, the MCE for the Bayes Rule with $\frac{a_{10}}{a_{01}}=10$ is 0.8286.
+
+c. Recall Liz, our patient from part 1. How would you classify her under this classifier?
+
+Because Liz had $P(Y=1 \vert x) = 0.0496$, she would be classified as $HD = 0$ (or no heart disease since the condition $P(Y=1 \vert x) \geq 0.091$ was not met).
+
+Now, draw two estimated curves where x = posterior threshold, and y = misclassification errors, corresponding to the thresholding rule given in x-axis.
+
+d. Use weighted misclassification error, and set $a_{10}/a_{01}=10$. How well does the Bayes rule classifier perform? 
+
+e. Use weighted misclassification error, and set $a_{10}/a_{01}=1$. How well does the Bayes rule classifier perform? 
+
+To answer both d and e, we generate the following plot:
+```{r}
+#Generate vector with evenly spaced threshold values for P(Y=1)
+thresholds <- seq(0,1,length=201)
+l <- length(thresholds)
+#For each value in the vector, calculate the weighted MCE given a_10/a_01 = 10
+mce.vector.10 <- matrix(0,1,201)
+for (i in 1:l) {
+  fit.exh.pred.bayes <- rep("0", 1406)
+  fit.exh.pred.bayes[fit.exh$fitted > thresholds[i]] = "1" 
+  MCE.bayes = (sum(10*(fit.exh.pred.bayes[hd_data$HD == "1"] != "1")) 
+           + sum(fit.exh.pred.bayes[hd_data$HD == "0"] != "0"))/length(hd_data$HD)
+  mce.vector.10[i] <- MCE.bayes
+}
+#For each value in the vector, calculate the weighted MCE given a_10/a_01 = 1
+mce.vector.1 <- matrix(0,1,201)
+for (i in 1:l) {
+  fit.exh.pred.bayes <- rep("0", 1406)
+  fit.exh.pred.bayes[fit.exh$fitted > thresholds[i]] = "1" 
+  MCE.bayes = (sum(1*(fit.exh.pred.bayes[hd_data$HD == "1"] != "1")) 
+           + sum(fit.exh.pred.bayes[hd_data$HD == "0"] != "0"))/length(hd_data$HD)
+  mce.vector.1[i] <- MCE.bayes
+}
+#Plot both, a_10/a_01 = 10 in blue, a_10,a_01 = 1 in red
+plot(thresholds, mce.vector.10, col="blue", pch=16, cex=.7, 
+     xlab="Thresholds for P(Y=1)", 
+     ylab="Weighted MCE",
+     xlim=c(0, 1),
+     ylim=c(0, 2.5))
+points(thresholds, mce.vector.1, col="red", pch=16, cex=.7)
+title("Blue curve for a10/a01 = 10 and red for a10/a01 = 1")
+```
+
+## Problem 2
+<!---
+How well can we predict whether a bill will be passed by the legislature? 
+
+Hundreds to thousands of bills are written each year in Pennsylvania. Some are long, others are short. Most of the bills do not even get to be voted on (“sent to the floor”). The chamber meets for 2-year sessions.  Bills that are not voted on before the end of the session (or which are voted on but lose the vote) are declared dead. Most bills die. In this study we examine about 8000 bills proposed since 2009, with the goal of building a classifier which has decent power to forecast which bills are likely to be passed. 
+
+We have available some information about 8011 bills pertaining to legislation introduced into the Pennsylvania House of Representatives.  The goal is to predict which proposals will pass the House. Here is some information about the data:
+
+The response is the variable called `status.` `Bill:passed` means that the bill passed the House; `governor:signed` means that the bill passed both chambers (including the House) and was enacted into law; `governor:received` means that the bill has passed both chambers and was placed before the governor for consideration.  All three of these statuses signify a success or a PASS (Meaning that the legislature passed the bill. This does not require it becoming law). All other outcomes are failures.
+
+Here are the rest of the columns:
+
+*	`Session` – in which legislative session was the bill introduced
+*	`Sponsor_party` – the party of the legislator who sponsored the bill (every bill has a sponsor)
+*	`Bill_id` – of the form HB-[bill number]-[session], e.g., `HB-2661-2013-2014` for the 2661st House Bill introduced in the 2013-2014 session.
+*	`Num_cosponsors` – how many legislators cosponsored the bill
+*	`Num_d_cosponsors` – how many Democrats cosponsored the bill
+*	`Num_r_cosponsors` – how many Republicans cosponsored the bill
+*	`Title_word_count` – how many words are in the bill’s title
+*	`Originating_committee` – most bills are sent (“referred”) to a committee of jurisdiction (like the transportation committee, banking & insurance committee, agriculture & rural affairs committee) where they are discussed and amended.  The originating committee is the committee to which a bill is referred.
+*	`Day_of_week_introduced` – on what day the bill was introduced in the House (1 is Monday)
+*	`Num_amendments` – how many amendments the bill has
+*	`Is_sponsor_in_leadership` – does the sponsor of the bill hold a position inside the House (such as speaker, majority leader, etc.)
+*	`num_originating_committee_cosponsors` – how many cosponsors sit on the committee to which the bill is referred
+*	`num_originating_committee_cosponsors_r` – how many Republican cosponsors sit on the committee to which the bill is referred
+*	`num_originating_committee_cosponsors_d` - how many Democratic cosponsors sit on the committee to which the bill is referred
+
+The data you can use to build the classifier is called `Bills.subset`. It contains 7011 records from the full data set. I took a random sample of 1000 bills from the 2013-2014 session as testing data set in order to test the quality of your classifier, it is called `Bills.subset.test.`
+
+Your job is to choose a best set of classifiers such that
+
+* The testing ROC curve pushes to the upper left corner the most, and has a competitive AUC value.
+* Propose a reasonable loss function, and report the Bayes rule together with its weighted MIC. 
+* You may also create some sensible variables based on the predictors or make other transformations to improve the performance of your classifier.
+
+Here is what you need to report: 
+--->
+#### Project Goal
+
+Laws. They govern almost every facet of our daily life: education, environment, health, business, intfrastructure, etc. They not only govern how we currently navigate in civil society, but affect future resources, laws, and outcomes as well. Since 2009 over 25,000 bills have been introduced in the state of Pennsylvania ([source](https://legiscan.com/PA)). Despite this large number of bills introduced, only a fraction of those are enacted into law. For example, in the 2013-2014 season 3,998 bills were introduced in the House and Senate. Of those 3,998 only 369 (9.2%) became law ([source](http://www.post-gazette.com/news/politics-state/2016/05/31/In-Pennsylvania-legislature-bills-have-a-tendency-to-stall/stories/201605310086)). Given the weight these national and state mandates it would be helpful if we were able to discern the qualities of a successful bill in order to most wisely use limited government resources. This project seeks to address this issue by using data to build a model to predict whether a given bill introduced into the Pennsylvania House of Representatives will pass or not. 
+
+#### Summary of the data
+
+```{r, include=FALSE, results='hide'}
+bill.data.test <- read.csv("Bills.subset.test.csv", header=TRUE, sep=",", na.strings="")
+summary(bill.data.test)
+dim(bill.data.test)
+bill.data.train <- read.csv("Bills.subset.csv", header=TRUE, sep=",", na.strings="")
+dim(bill.data.train)
+#bill.data.train
+```
+The provided data had already been split into training and testing data. The training data consists of 15 variables across 7011 entries. With respect to overall data set characteristics, the data come from sessions as far back as 2009 and as recently as 2014. Deciding factors in the outcome of the bill - such as party sponsor, number of co-sponsors, originating committee, etc. - will be used as variables and occupy their own column. 
+
+The outcome we are looking to explain is if the bill passed the House or not. This information can be found in the `status` column. Any of the following statuses correspond to a 'passing' bill: `Bill:passed`, `governor:signed`, or `governor:received`.
+
+```{r, include=FALSE, results='hide'}
+head(bill.data.train)
+tail(bill.data.train)
+summary(bill.data.train)
+# changing 'status' and 'sponsor_party' to categorical variables
+bill.data.train$status <- factor(ifelse(bill.data.train$status=="bill:passed" | bill.data.train$status=="governor:signed" | bill.data.train$status=="governor:received", "1", "0"))
+bill.data.train$sponsor_party<- factor(ifelse(bill.data.train$sponsor_party=="Democratic", "1", "0")) # categorical for party - 1=Democratic, 0=Republican
+
+bill.data.test$status <- factor(ifelse(bill.data.test$status=="bill:passed" | bill.data.test$status=="governor:signed" | bill.data.test$status=="governor:received", "1", "0"))
+bill.data.test$sponsor_party<- factor(ifelse(bill.data.test$sponsor_party=="Democratic", "1", "0")) # categorical for party - 1=Democratic, 0=Republican
+
+#summary(bill.data.train)
+bill.data.train <- bill.data.train[,-1] #removes bill_id
+summary(bill.data.train)
+bill.data.test <- bill.data.test[,-1]
+summary(bill.data.test)
+#sum(is.na(bill.data.train$sponsor_party)) #102
+sum(is.na(bill.data.train))
+bill.data.train <- na.omit(bill.data.train)
+dim(bill.data.train)
+table(bill.data.train$status) #6192 - died;  455 - passed
+```
+
+After assigning a value of 1 to all passing statuses and 0 to all non-passing states there are 455 passing bills and 6192 proposed non-passing ones, or roughly 7%. This is in line with the figures discussed above. 
+
+From the summary data, there are several other factors whose ranges and values are worth noting. Specifically, these values are sponsor party, number of co-sponsors, title word count, and originating committee. 
+
+##### Sponsor party
+
+```{r, echo=FALSE}
+#library(ggplot2)
+#dems <- bill.data.train[which(bill.data.train$sponsor_party=="Democratic"),]
+# dim(dems)
+# #DF[which(DF$ID==2 | DF$ID==5), ]
+# repubs <- bill.data.train[which(bill.data.train$sponsor_party=="Republican"),]
+# dim(repubs)
+# a = data.frame(group = "Democratic", value = bill.data.train[which(bill.data.train$sponsor_party=="Democratic"),]
+# b = data.frame(group = "Republican", value = bill.data.train[which(bill.data.train$sponsor_party=="Republican"),]
+# plot.data = rbind(a, b)
+# ggplot(plot.data, aes(x=group, y=value, fill=group)) +  geom_boxplot() 
+#dem_sum <- sum.is(bill.data.train$sponsor_party)
+#hist(bill.data.train$sponsor_party, col="darkgreen", ylim=c(0,3700), ylab ="Number of bills sponsored", xlab="Sponsor party")
+summary(bill.data.train$sponsor_party)
+
+```
+The number of bills proposed by both parties was almost even, with Republicans proposing roughly 400 more bills. 
+
+##### Number of co-sponsors
+
+```{r, echo=FALSE}
+summary(bill.data.train$num_cosponsors)
+#table(bill.data.train$num_cosponsors)
+#ggplot(bill.data.train) + geom_boxplot(aes(x=bill.data.train$num_cosponsors))
+```
+
+The mean number of co-sponsors is ~24, though some bills have as many as 165 co-sponsors.
+
+##### Title word count
+
+```{r, echo=FALSE}
+summary(bill.data.train$title_word_count)
+```
+
+The average number of words in bill titles is ~34, though some have as little as 6, while others have as many as 751!
+
+##### Originating committee 
+
+```{r, echo=FALSE}
+summary(bill.data.train$originating_committee)
+```
+
+Originating committee is of particular interest due to the fact that it alludes to the content of the bill, a feature that is otherwise missing in the data set. In this given data set there are 25 (and 1 uncategorized group) committees responsible for proposing the 8011 bills we see here. Of the 27 committees listed below 3 seem to function as "meta" committees (Committee On Committees, Committee On Ethics, & Rules), and thus the exclusion of some of these might be the reason the data set only has 25 committees listed. 
+
+1. Aging & Older Adult Services 
+2. Agriculture & Rural Affairs
+3. Appropriations 
+4. Children & Youth	
+5. Commerce	
+6. Committee On Committees	
+7. Committee On Ethics	
+8. Consumer Affairs	
+9. Education	 
+10. Environmental Resources & Energy	
+11. Finance	Representative 
+12. Game & Fisheries	
+13. Gaming Oversight	
+14. Health	
+15. Human Services	
+16. Insurance	
+17. Judiciary	
+18. Labor & Industry	
+19. Liquor Control	
+20. Local Government	
+21. Professional Licensure	
+22. Rules	
+23. State Government	
+24. Tourism & Recreational Development	
+25. Transportation	
+26. Urban Affairs	
+27. Veterans Affairs & Emergency Preparedness
+
+Without knowing which numbers correspond to which committee listed above we are still able to observe that the committee with the most proposed bill had 1047, while the committee with the least only had 12. 
+
+### Building a classifier
+
+We start by examining how all of the features are related to bill passage. 
+
+```{r, echo=FALSE, results='hide'}
+tapply(bill.data.train$sponsor_party, bill.data.train$status, mean) #NA
+tapply(bill.data.train$session, bill.data.train$status, mean) #NA
+tapply(bill.data.train$num_cosponsors, bill.data.train$status, mean)# 22.9 vs. 28.6
+tapply(bill.data.train$num_d_cosponsors, bill.data.train$status, mean) #10.3 vs. 10.08
+tapply(bill.data.train$num_r_cosponsors, bill.data.train$status, mean) #***12.59 - 0; 18.51 - 1***
+tapply(bill.data.train$title_word_count, bill.data.train$status, mean) #***32.2 - 0; 60.3 - 1***
+tapply(bill.data.train$originating_committee, bill.data.train$status, mean) #NA
+tapply(bill.data.train$day.of.week.introduced, bill.data.train$status, mean) #NA
+tapply(bill.data.train$num_amendments, bill.data.train$status, mean) #***0.1106266 vs. 1.0967033***
+tapply(bill.data.train$is_sponsor_in_leadership, bill.data.train$status, mean) # 0.6161176 vs. 0.6989011 
+tapply(bill.data.train$num_originating_committee_cosponsors, bill.data.train$status, mean)#2.068960 vs. 3.050549
+tapply(bill.data.train$num_originating_committee_cosponsors_r, bill.data.train$status, mean)#1.340116 vs. 2.160440
+tapply(bill.data.train$num_originating_committee_cosponsors_d, bill.data.train$status, mean)# 0.7288437 vs. 0.8901099 
+```
+From these striations we find the most interesting differences in means from the following varables: number of republican co-sponsors, title word count, and number of amendments. Seeing this visually illustrates this point. 
+
+```{r, echo=FALSE}
+boxplot(bill.data.train$num_r_cosponsors~bill.data.train$status, ylab="Number of Republican co-sponsors", xlab="Bill passage (0-No, 1-Yes)")
+boxplot(bill.data.train$title_word_count~bill.data.train$status, ylab="Title word count", xlab="Bill passage (0-No, 1-Yes)")
+boxplot(bill.data.train$num_amendments~bill.data.train$status, ylab="Number of amendments in bill", xlab="Bill passage (0-No, 1-Yes)")
+```
+
+__These boxplots illustrate these main points:__ average number of Republican cosponsors is 50% more on passing bills, average words in passing bills is double that in non-passing ones, and average number of amendments in non-passing bills is close to zero, while the average amendments for passing bills is slightly above 1. 
+
+The next step in building a classifier is performing logistic regression on the possible variables. 
+
+```{r, echo=FALSE, results='hide'}
+bill.fit1 <- glm(status~sponsor_party, bill.data.train, family=binomial(logit)) # AIC: 3325.2, chi.sq1 = 3391.1-3321.2 = 69.9
+summary(bill.fit1, results=TRUE) #*-7.998 1.26e-15*
+bill.fit1.1 <- glm(status~session, bill.data.train, family=binomial(logit)) # AIC: AIC: 3391.5, chi.sq1.1 = 3410.5-3383.5 = 27
+summary(bill.fit1.1, results=TRUE) #4.448 8.66e-06
+bill.fit1.2 <- glm(status~num_cosponsors, bill.data.train, family=binomial(logit)) # AIC: 3372.4 , chi.sq1.2 = 3410.5-3368.4 = 42.1
+summary(bill.fit1.2, results=TRUE) #6.844 7.72e-12
+bill.fit1.3 <- glm(status~num_d_cosponsors, bill.data.train, family=binomial(logit)) # AIC: 3414.2 , chi.sq1.3 = 3410.5-3410.2 = .3 !!!
+summary(bill.fit1.3, results=TRUE) #0.486    0.627
+bill.fit1.4 <- glm(status~num_r_cosponsors, bill.data.train, family=binomial(logit)) # AIC: 3352.8 , chi.sq1.4 = 3410.5-3348.8 = 61.7
+summary(bill.fit1.4, results=TRUE) #****8.361   <2e-16***** 
+bill.fit1.5 <- glm(status~title_word_count, bill.data.train, family=binomial(logit)) # AIC: 3269.6 , chi.sq1.5 = 3410.5-3265.6 = 144.9
+summary(bill.fit1.5, results=TRUE) #****11.08   <2e-16****
+bill.fit1.6 <- glm(status~originating_committee, bill.data.train, family=binomial(logit)) # AIC: 3098.3 , chi.sq1.6 = 3337.6-3048.3 = 289.3
+summary(bill.fit1.6, results=TRUE) #(multiple) -6.318 2.64e-10
+bill.fit1.7 <- glm(status~day.of.week.introduced, bill.data.train, family=binomial(logit)) # AIC: 3419 , chi.sq1.7 = 3410.5-3407.0 = 3.5
+summary(bill.fit1.7, results=TRUE) # 1.365    0.172 
+bill.fit1.8 <- glm(status~num_amendments, bill.data.train, family=binomial(logit)) # AIC: 2609.4 , chi.sq1.8 = 3410.5-2605.4 = 805.1
+summary(bill.fit1.8, results=TRUE) #****25.02   <2e-16****
+bill.fit1.9 <- glm(status~is_sponsor_in_leadership, bill.data.train, family=binomial(logit)) # AIC: 3394.7 , chi.sq1.9 = 3410.5-3390.7 = 19.8
+summary(bill.fit1.9, results=TRUE) #0.10329    4.35 1.36e-05
+bill.fit1.10 <- glm(status~num_originating_committee_cosponsors, bill.data.train, family=binomial(logit)) # AIC: 3337.6 , chi.sq1.10 = 3410.5-3333.6 = 76.9
+summary(bill.fit1.10, results=TRUE) #****9.283   <2e-16*****
+bill.fit1.11 <- glm(status~num_originating_committee_cosponsors_r, bill.data.train, family=binomial(logit)) # AIC: 3341.3 , chi.sq1.11 = 3410.5-3337.3 = 73.2
+summary(bill.fit1.11, results=TRUE) #*9.134   <2e-16*
+bill.fit1.12 <- glm(status~num_originating_committee_cosponsors_d, bill.data.train, family=binomial(logit)) # AIC: 3403.7 , chi.sq1.12 = 3410.5-3399.7 = 10.8
+summary(bill.fit1.12, results=TRUE) #3.426 0.000614
+```
+
+Choosing the most  important variable to add using the criteria highest $|z|$ value or smallest $p$ value we choose the one with a combination of high $|z|$ values and small $p$ values: title word count (though number of amendments, number of originating cosponsors on bill committtee, number of republican sponsors sitting on referred committee, number of Republican sponsors, and sponsor party all had similar salient values). It should also be noted that number of amendments results in the lowest AIC by a wide margin.
+
+```{r, echo=FALSE, results='hide'}
+library(xtable)
+options(xtable.comment = FALSE)
+bill.fit1.0.0 <- glm(status~title_word_count, bill.data.train, family=binomial) # just title word count
+summary(bill.fit1.0.0)
+bill.fit1.0.1 <- glm(status~num_amendments, bill.data.train, family=binomial) # just number amendments
+bill.fit2 <- glm(status~title_word_count + num_amendments, bill.data.train, family=binomial) # both title word count + number amendments
+xtable(bill.fit1.0.0)
+```
+
+```{r, echo=FALSE, results='hide'}
+#Wald Test/Intervals
+summary(bill.fit1.0.0) # AIC: 2588.6, chi.sq2=3410.5-2582.6 = 827.9, title word count: 1.28e-06 ; number of amendments: < 2e-16
+confint.default(bill.fit1.0.0)
+# confint(bill.fit1)
+#Chi-Squared Test
+anova(bill.fit1.0.0, test="Chisq")#title word count: < 2e-16 ; number of amendments: < 2e-16
+```
+
+The variable is significant at the .001 level. Title word count has $p$ values of 1.28e-06 and < 2e-16 for Wald Test/Chi-squared test (respectively).
+
+<!--- not included
+```{r}
+chi.sq1 = 3391.1-3321.2
+pchisq(chi.sq1, 1, lower.tail = FALSE) #6.238845e-17
+chi.sq1.1 = 3410.5-3383.5
+pchisq(chi.sq1.1, 1, lower.tail = FALSE) #2.034555e-07
+chi.sq1.2 = 3410.5-3368.4
+pchisq(chi.sq1.2, 1, lower.tail = FALSE)
+chi.sq1.3 = 3410.5-3410.2
+pchisq(chi.sq1.3, 1, lower.tail = FALSE)
+chi.sq1.4 = 3410.5-3348.8
+pchisq(chi.sq1.4, 1, lower.tail = FALSE)
+chi.sq1.5 = 3410.5-3265.6
+pchisq(chi.sq1.5, 1, lower.tail = FALSE)
+chi.sq1.6 = 3337.6-3048.3
+pchisq(chi.sq1.6, 1, lower.tail = FALSE)
+chi.sq1.7 = 3410.5-3407.0
+pchisq(chi.sq1.7, 1, lower.tail = FALSE)
+chi.sq1.8 = 3410.5-2605.4
+pchisq(chi.sq1.8, 1, lower.tail = FALSE) #4.199849e-177
+chi.sq1.9 = 3410.5-3390.7
+pchisq(chi.sq1.9, 1, lower.tail = FALSE) #8.598268e-06
+chi.sq1.10 = 3410.5-3333.6
+pchisq(chi.sq1.10, 1, lower.tail = FALSE) #1.798371e-18
+chi.sq1.11 = 3410.5-3337.3
+pchisq(chi.sq1.11, 1, lower.tail = FALSE) #1.171558e-17
+chi.sq1.12 = 3410.5-3399.7
+pchisq(chi.sq1.12, 1, lower.tail = FALSE) #0.001015001
+```
+--->
+Lastly we get a prediction from this model by using a random row from the data that was reserved for testing.
+
+```{r, echo=FALSE}
+#dim(bill.data.test)
+bill.fit2.predict <- predict(bill.fit2, bill.data.test[1000,], type="response")
+bill.fit2.predict #3.8% using the data from the last row in the test data set
+```
+
+The prediction that this bill would pass is 3.6% using this model. 
+
+
+#### Model exploration
+<!-- none of this worked and it was a big mess
+Given the large number of variables we choose to use backward selection to investigate other possible models. 
+```{r, eval=FALSE}
+#=====neither of these is working=======
+#choosing a model via forward selection
+library(leaps) 
+#bill.fit.full <- glm(status ~., bill.data.train, family=binomial) # too many variables
+dim(bill.data.train) #6647 x 14
+bill.fit.backward <- regsubsets(status~., bill.data.train[,-1], nvmax = 42, method="backward")
+bill.fit.back <- summary(bill.fit.backward)
+which.min(bill.fit.back$cp) #15 vars
+which.min(bill.fit.back$bic) #15
+bill.fit.back
+coef(bill.fit.backward)
+#bill.fit.backward
+#bill.data.train
+
+
+#bill.fit.forward <- regsubsets(status~., bill.data.train, nvmax=14, method="forward")
+# bill.fit.forward1 <- update(bill.fit.forward, .~. -id)
+bill.forw.summary <- summary(bill.fit.forward)
+#bill.forw.summary
+#names(bill.forw.summary)
+bill.fit.forward
+bill.forw.summary$cp
+which.min(bill.forw.summary$cp) #16 variables
+bill.forw.summary$bic
+which.min(bill.forw.summary$bic) #16 variables(?), but 10-16 are fairly similar
+bill.coef.fwd <- coef(bill.fit.forward)
+```
+
+```{r eval=FALSE}
+# AIC through bestglm()
+## doesn't work either -- too many variables I think
+library("bestglm")
+bill.fit3 <- glm(status~., bill.data.train, family=binomial)
+summary(bill.fit3)
+bill.Xy <- model.matrix(status~.+0, bill.data.train)[,-1]
+bill.Xy <- data.frame(bill.Xy, bill.data.train$status)
+bill.Xy
+str(bill.Xy)
+bill.fit.all <- bestglm(bill.Xy, family = binomial, method = "exhaustive", IC="AIC", nvmax = 15)
+```
+
+```{r eval=FALSE}
+#Lasso
+library(glmnet)
+names(bill.data.train) # status is column 10
+Y.bill <- bill.data.train[, 10]
+bill.data.train # column 1 still bill id so needs to be removed
+X.bill <- model.matrix(status~., data=bill.data.train)[,-1]
+colnames(X.bill)
+fit.bill.lambda <- glmnet(X.bill, Y.bill, alpha=1, lambda=100, family="binomial")
+names(fit.bill.lambda)
+fit.bill.lambda$lambda
+fit.bill.lambda$beta
+fit.bill.lambda$df #0 non-zero coefficients :( -- clearly wrong
+coef(fit.bill.lambda)
+
+fit.bill.elastic <- glmnet(X.bill, Y.bill, alpha=.99, family="binomial")
+fit.bill.elas.cv <- cv.glmnet(X.bill, Y.bill, alpha=.99, nfolds=10, family="binomial")
+plot(fit.bill.elas.cv) #lambda = 16 - 35
+set.seed(10)
+fit.bill.final <- glmnet(X.bill, Y.bill, alpha=.99, lambda=22, family ="binomial") #final elastic net fit
+bill.betafinal <- coef(fit.bill.final)
+bill.betafinal <- beta.final[which(bill.betafinal!=0),]
+bill.betafinal #0 non-zero coefficients :( -- clearly wrong as well
+```
+--->
+
+```{r, echo=FALSE, results='hide'}
+#just building a model using most salient values from logistic regression
+bill.fit.full <- glm(status ~ sponsor_party + num_r_cosponsors + title_word_count + num_amendments + num_originating_committee_cosponsors, bill.data.train, family=binomial)
+summary(bill.fit.full)
+#taking out number of republican co-sponsors - not significant
+bill.fit.full <- glm(status ~ sponsor_party + title_word_count + num_amendments + num_originating_committee_cosponsors, bill.data.train, family=binomial)
+summary(bill.fit.full) #now all significant at .05 level - AIC: 2472.7
+
+#Wald Test/Intervals
+confint.default(bill.fit.full)
+#Chi-Squared Test
+anova(bill.fit.full, test="Chisq")#title word count: < 2e-16 ; number of amendments: < 2e-16
+bill.fitfull.predict <- predict(bill.fit.full, bill.data.test[1000,], type="response")
+bill.fitfull.predict #4.9% using the data from the last row in the test data set
+# bill.fit2 and bill.fit.full are 2 competing models -- also bill.fit1.0.0 (just title # words) and bill.fit1.0.1 (just # amendments)
+```
+
+The two classifiers we came up with are `bill.fit1.0.0`, using logistic regression with just `title_word_count`, and `bill.fit.full`, using logistic regression with `sponsor_party`, `num_r_cosponsors`, `title_word_count`, `num_amendments`, and `num_originating_committee_cosponsors`.
+
+### Classifier 1
+
+Using a threshold probability of 2/3, we can plug values in to the estimated probability. Thus, we will classify a bill being $Y=1$ (passing) if:
+
+$$\hat Y=1 ~~~~ \text{if} ~~~~ \frac{e^{-3.057+.01117\cdot title\_word\_count}}{1+e^{-3.057+.01117\cdot title\_word\_count}} > \frac{2}{3}.$$
+$$\hat Y=1 ~~~~ \text{if} ~~~~ title\_word\_count > \frac{\log(2)+3.057}{.01117}=335.73$$
+And using a threshold of 1/2:
+
+$$\hat y = 1 ~~~~ \text{if} ~~~~ title\_word\_count > \frac{3.057}{0.01117}=273.68$$
+<!---
+And using a threshold of 1/3:
+
+$$\hat y = 1 ~~~~ \text{if} ~~~~ title\_word\_count > \frac{\log(\frac{1}{2})+3.057}{0.01117}=211.63$$
+--->
+```{r, echo=FALSE}
+par(mfrow=c(1,1))
+plot(jitter(as.numeric(bill.data.train$status)-1, factor=1) ~ bill.data.train$title_word_count, 
+     pch=as.numeric(bill.data.train$status)+2, col=bill.data.train$status, 
+     ylab="Obs'n", xlab="title word count")
+legend("topleft", legend=c("0", "1"), pch=c(3,4), 
+       col=unique(bill.data.train$status))
+
+abline(v=335.73, lwd=5, col="blue")
+abline(v=273.68, lwd=5, col="red")
+#abline(v=211.63, lwd=5, col="yellow")
+title("Two classifiers based on title word count: red:prob>.5,
+      blue: prob>2/3")
+```
+
+```{r, echo=FALSE, results='hide'}
+#install.packages('e1071', dependencies=TRUE)
+library(caret)
+#dim(bill.data.train) #6647   14
+bill.fit1.0.0.pred67 <- ifelse(bill.fit1.0.0$fitted.values > 2/3, "1", "0")
+set.seed(10)
+bill.output1 <- data.frame(bill.data.train$status, bill.fit1.0.0.pred67, bill.fit1.0.0$fitted.values)[sample(6647, 10),]
+names(bill.output1) <- c("Y", "Predicted Y", "Prob")
+bill.output1
+cm.bill1.67 <- table(bill.fit1.0.0.pred67, bill.data.train$status)
+cm.bill1.67
+confusionMatrix(data = bill.fit1.0.0.pred67,
+                 reference = bill.data.train$status,
+                 positive = levels(bill.fit1.0.0.pred67)[2])
+
+```
+
+Evaluating the 2/3 threshold produces the following important evaluation criteria:
+
+            Sensitivity : 0.99903         
+            Specificity : 0.02857         
+         Pos Pred Value : 0.93331         
+         Neg Pred Value : 0.68421 
+         
+
+```{r, echo=FALSE, results='hide'}
+bill.fit1.0.0.pred.5 <- ifelse(bill.fit1.0.0$fitted.values > 1/2, "1", "0")
+set.seed(10)
+bill.output1 <- data.frame(bill.data.train$status, bill.fit1.0.0.pred.5, bill.fit1.0.0$fitted.values)[sample(6647, 10),]
+names(bill.output1) <- c("Y", "Predicted Y", "Prob")
+bill.output1
+cm.bill1.5 <- table(bill.fit1.0.0.pred.5, bill.data.train$status)
+cm.bill1.5
+confusionMatrix(data = bill.fit1.0.0.pred.5,
+                 reference = bill.data.train$status,
+                 positive = levels(bill.fit1.0.0.pred.5)[2])
+```
+
+The second rule (threshold 1/2) produced the following evaluation criteria:
+
+            Sensitivity : 0.99790         
+            Specificity : 0.03736         
+         Pos Pred Value : 0.93381         
+         Neg Pred Value : 0.56667 
+         
+And then comparing ROC curve and AUC:
+
+```{r, echo=FALSE}
+library(pROC)
+bill.fit1.0.0.roc <- roc(bill.data.train$status, bill.fit1.0.0$fitted.values, plot=T, col="blue")
+#names(bill.fit1.0.0.roc)
+plot(1-bill.fit1.0.0.roc$specificities, bill.fit1.0.0.roc$sensitivities, col="red", pch=16,
+     xlab = "False positive",
+     ylab = "Sensitivity")
+bill.fit1.0.0.roc$auc #Area under the curve: 0.6761
+#auc(bill.fit1.0.0.roc)
+```
+
+
+### Classifier 2
+
+For threshold of 2/3:
+
+$$\hat Y = 1\space if\space title\_word\_count > 164.79 \cdot sponsor\_party - 363.75 \cdot num\_amendments - 9.646 \cdot num\_originating\_committee\_cosponsors + 841.906$$
+
+For threshold of 1/2:
+
+$$\hat Y = 1\space if\space title\_word\_count > 164.79 \cdot sponsor\_party - 363.75 \cdot num\_amendments - 9.646 \cdot num\_originating\_committee\_cosponsors + 697.5$$
+Then plotting both lines:
+
+```{r, echo=FALSE}
+plot(jitter(bill.data.train$title_word_count, factor=1.5), bill.data.train$title_word_count, col=bill.data.train$status, 
+     pch=as.numeric(bill.data.train$status)+2,
+     xlab="Title word count", ylab="Status (1-passing, 0-failing)")
+legend("topleft", legend=c("Linear Boundary for .5", "Linear Boundary for 2/3"),
+       lty=c(1,1), lwd=c(2,2), col=c("red", "blue"))
+abline(a=455, b=-4.09, lwd=3, col="red")
+abline(a=503, b=-4.09, lwd=3, col="blue")
+title("Linear Boundares. Red: threshold at .5, Blue: at 2/3")
+```
+
+And then obtaining sensitivity, specificity, ROC curve & AUC values:
+
+Threshold 2/3:
+
+```{r, echo=FALSE, results='hide'}
+bill.fit.full.pred67 <- ifelse(bill.fit.full$fitted.values > 2/3, "1", "0")
+set.seed(10)
+bill.output2.67 <- data.frame(bill.data.train$status, bill.fit.full.pred67, bill.fit.full$fitted.values)[sample(6647, 10),]
+names(bill.output2.67) <- c("Y", "Predicted Y", "Prob")
+bill.output2.67
+cm.bill2.67 <- table(bill.fit.full.pred67, bill.data.train$status)
+cm.bill2.67
+confusionMatrix(data = bill.fit.full.pred67,
+                 reference = bill.data.train$status,
+                 positive = levels(bill.fit.full.pred67)[2])
+```
+
+            Sensitivity : 0.9973         
+            Specificity : 0.1604         
+         Pos Pred Value : 0.9417         
+         Neg Pred Value : 0.8111 
+
+Threshold 1/2:
+
+```{r, echo=FALSE, results='hide'}
+bill.fit.full.pred.5 <- ifelse(bill.fit.full$fitted.values > 1/2, "1", "0")
+set.seed(10)
+bill.output2.5 <- data.frame(bill.data.train$status, bill.fit.full.pred.5, bill.fit.full$fitted.values)[sample(6647, 10),]
+names(bill.output2.5) <- c("Y", "Predicted Y", "Prob")
+bill.output2.5
+cm.bill2.5 <- table(bill.fit.full.pred.5, bill.data.train$status)
+cm.bill2.5
+confusionMatrix(data = bill.fit.full.pred.5,
+                 reference = bill.data.train$status,
+                 positive = levels(bill.fit.full.pred.5)[2])
+```
+           
+            Sensitivity : 0.9927         
+            Specificity : 0.2593         
+         Pos Pred Value : 0.9480         
+         Neg Pred Value : 0.7239
+
+```{r, echo=FALSE}
+bill.fit.full.roc <- roc(bill.data.train$status, bill.fit.full$fitted.values, plot=T, col="blue")
+#names(bill.fit1.0.0.roc)
+plot(1-bill.fit.full.roc$specificities, bill.fit.full.roc$sensitivities, col="red", pch=16,
+     xlab = "False positive",
+     ylab = "Sensitivity")
+bill.fit.full.roc$auc #Area under the curve: 0.8302** vs. .68 with classifier 1
+#auc(bill.fit.full.roc)
+```
+
+Up to this point we used logistic regression to come up with 2 possible classifiers:  `bill.fit1.0.0`, with just `title_word_count`, and `bill.fit.full`, using logistic regression with `sponsor_party`, `num_r_cosponsors`, `title_word_count`, `num_amendments`, and `num_originating_committee_cosponsors`. Variables were chosen on the robustness of $|z|$ and $p$ values.
+
+We then established 2 rules for each classifier and individually investigated their performance via the following criteria: sensitivity, specificity, positive prediction value, negative prediction value, ROC curve and AUC. The last step is to choose one of the models by comparing these two classifiers side by side, along with 1 other classifier- classifier 3: `bill.fit1.0.1` - whose independent variable `num_amendments` performed as well as `title_word_count` in terms of $|z|$ and $p$.
+
+### Choosing the best classifier using testing data
+
+We are going to compare ROC curves in order to estimate the quality of our classifiers(`bill.fit1.0.0` - 1 var. `title_word_count`; `bill.fit1.0.1` 1 var. `num_amendments`; `bill.fit.full` - 5 vars. `sponsor_party`, `num_r_cosponsors`, `title_word_count`, `num_amendments`, and `num_originating_committee_cosponsors`). 
+
+```{r, echo=FALSE}
+bill.fit1.0.0.test <- predict(bill.fit1.0.0, bill.data.test, type="response")
+bill.fit1.0.1.test <- predict(bill.fit1.0.1, bill.data.test, type="response")
+bill.fit.full.test <- predict(bill.fit.full, bill.data.test, type="response")
+
+data.frame(bill.fit1.0.0.test, bill.fit1.0.1.test, bill.fit.full.test)[1:20,]
+```
+
+Seeing the 3 classifiers side by side we can see their $\hat Y$ values vary. We plot their ROC curves on the same graph to compare them. 
+
+```{r, include=FALSE, results='hide'}
+bill.fit1.0.0.testroc <- roc(bill.data.test$status, bill.fit1.0.0.test, plot=T, col="blue")
+bill.fit1.0.1.testroc <- roc(bill.data.test$status, bill.fit1.0.1.test, plot=T, col="blue")
+bill.fit.full.testroc <- roc(bill.data.test$status, bill.fit.full.test, plot=T, col="blue")
+```
+
+
+```{r, echo=FALSE}
+par(mfrow=c(1,1))
+plot(1-bill.fit.full.testroc$specificities, bill.fit.full.testroc$sensitivities, col="red", pch=16,
+     xlab=paste("AUC(5 vars.) =",
+                round(auc(bill.fit.full.testroc),2),
+                " AUC(1 var) =",
+                round(auc(bill.fit1.0.0.testroc),2),
+                " AUC(1 var) =",
+                round(auc(bill.fit1.0.1.testroc),2) ),
+     ylab="Sensitivities")   # For some reason it needs a return here?
+
+points(1-bill.fit1.0.0.testroc$specificities, bill.fit1.0.0.testroc$sensitivities, col="blue", pch=16)
+points(1-bill.fit1.0.1.testroc$specificities, bill.fit1.0.1.testroc$sensitivities, col="yellow", pch=16)
+title("Comparison of three models using testing data")
+```
+
+
+`bill.fit.full.test` - red |
+`bill.fit1.0.0.test` - blue |
+`bill.fit1.0.1.test` - yellow
+
+As the overlaid ROC curves show, the classifier with 5 variables is the one that performs the best. It has the highest AUC at .81. 
+
+By using both training (6647 entries after cleaning) and testing (1000 randomly chosen entries) data we were able to avoid overfitting the models and also using the test data to compare the quality of the classifiers, leading us to choose classifier 2 (`bill.fit.full`).
+
+    
+#### Suggestions 
+
+__4. Suggestions you may have: what important features should have been collected which would have helped us to improve the quality of the classifiers.__
+
+It would be good to have more descriptive/content information in general to improve the quality of the classifiers. For example, the knowing which originating committee values correspond to the dataset entries could supply insight on which areas of government pass most bills, and consequently what type of bills are more likely to pass. Moreover, what is most lacking from this set of features are values that speak to the _content_ of the bills. Number of words in title attempts to serve as a stand in for complexity, severity, and/or robustness of a proposal, though this is hardly a reasonable assumption. For starters running a sentiment analysis on the text of the proposed bills could tag them as either "positive" or "negative" in tone, a factor that may influence their outcome. Access and similar analysis of public opinion pieces and articles about these bills would also help in this regard. Text analysis like this could also speak to the complexity of the bill in terms of vocabulary. Similarly, by using word frequency analysis removing [stop words](http://xpo6.com/list-of-english-stop-words/) we could ascertain several key tags for texts and have categorical columns/values for them (ie "education", "infrastructure", "public health", etc.). Additionally, the timing of when the bill was introduced (in the session) might be a telling value to have, as timing is purported to affect legislative outcomes ([source 1](https://fiscalnote.com/2016/03/02/three-legislative-factors-that-lead-to-efficient-bill-passage/), [source 2](https://www.questia.com/library/journal/1G1-241861882/factors-of-influence-on-legislative-decision-making)). It is also worth noting that source 1 shows that Pennsylvania as a state is has near the lowest passing rate at 7% (which further confirms our findings above), and is only behind NJ (5.3%), MN (4.2%), and CT (1.6%). The state with the highest passing rate is Colorado which has and average enacted rate at 63.4%. Topics for further investigation include attempting to find the differences between these two states that lead to these outcomes. 
+
+
+*Final notes*: The data is graciously lent from a friend. It is only meant for you to use in this class. All other uses are prohibited without permission. 
+

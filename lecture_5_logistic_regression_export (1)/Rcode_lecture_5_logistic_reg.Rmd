@@ -1,0 +1,613 @@
+---
+title: "Logistic Regression"
+author: "Modern Data Mining"
+date: ""
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, results = "hide", fig.width=6, fig.height=4)
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(bestglm, glmnet, leaps, car, tidyverse, mapproj)
+```
+
+
+\tableofcontents
+
+\pagebreak
+
+## 0. Introduction
+
+Read
+
++ Chapter 4.1-4.3.4 (too skimpy about Logistic reg)
++ Chapter 20.1-20.5 (Statistical Sleuth, OK, not enough either)
+
+
+
+
+Table of Contents
+
+0. Introduction
+1. A quick EDA
+2. Logistic Regressions (Illustrated with one predictor)
+    + Link Function
+    + Maximum Likelihood Estimator (MLE)
+3. Inference for the Coefficients
+    + Wald Intervals / Tests (through the MLE's)
+    + Likelihood Ratio Intervals / Tests (Chi-Squared Tests) 
+4. Multiple Logistic Regressions
+    + Natural Extension 
+    + Model selection through backward selection or AIC (Aikake's Information Criterion)
+   
+   
+
+
+
+
+### Case Study: Framingham Heart Study fram_data:
+
+1. Identify Coronary Heart Disease risk factors.  Famous study: http://www.framinghamheartstudy.org/about-fhs/index.php
+
+ i) Data: 1,406 health professionals.  Conditions gathered at the beginning of the study (early 50s).  Both the original subjects and their next generations have been included in the study.
+
+Variables:
+
+`Heart Disease`, `AGE`, `SEX`, Blood pressures expressed as `SBP` and `DBP`, `CHOL` (cholesterol level), `FRW` (age and gender adjusted weight) and `CIG` (number of cigarettes smoked each week, self-reported.)
+
+ ii) Goal: 
+
++ Identify risk factors
++ Predict the probability of one with `Heart Disease`
+
+ iii) In particular, 
+
+Predict Prob(HD=1) for a person who is:
+
+<center>
+|AGE|SEX   |SBP|DBP|CHOL|FRW|CIG|
+|---|---   |---|---|----|---|---|
+|45 |FEMALE|100|80 |180 |110|5  |
+</center>
+
+
+ iv)  `HD=1`: with Heart Disease and `HD=0`: No Heart Disease
+ 
+ 
+
+## 1. A quick EDA
+
+Read `Framingham.dat` as `fram_data`
+```{r}
+fram_data <- read.csv("Framingham.dat", sep=",", header=T, as.is=T)
+str(fram_data) 
+names(fram_data)
+summary(fram_data)
+```
+
+Rename and set variables to their correct type
+```{r, eval=FALSE}
+# names(fram_data)[1] <- "HD"
+# fram_data$HD <- as.factor(fram_data$HD)
+# fram_data$SEX <- as.factor(fram_data$SEX)
+```
+
+
+```{r}
+fram_data %<>%   # make the following change to the data frame
+   rename(HD = Heart.Disease.) %>%
+   mutate(HD = as.factor(HD), 
+          SEX = as.factor(SEX)) 
+```
+
+Structure of the data
+```{r}
+str(fram_data)
+```
+
+Last row, which will be used for prediction. Notice that the response `HD` is missing here.
+```{r}
+tail(fram_data, 1)
+```
+
+We take out the female whose HD will be predicted, and save it to fram_data.new
+```{r}
+fram_data.new <- fram_data[1407,]
+fram_data <- fram_data[-1407,]
+```
+
+We have 311 observations with HD = 0 and 1,095 with HD = 1
+```{r}
+summary(fram_data)
+```
+
+Notice missing values in FRW and CIG.  We won't take those observations off the data set. 
+```{r}
+sum(is.na(fram_data))
+```
+
+For simplicity we start with a simple question:
+**How does HD relate to SBP?**
+
+
+```{r}
+tapply(fram_data$SBP, fram_data$HD, mean) 
+```
+On average SBP seems to be higher among HD = 1 
+
+
+We can see the distribution of `SBP` through back to back box plots. Again, SBP seems to be higher when HD = 1
+```{r}
+plot(fram_data$HD, fram_data$SBP, ylab ="SBP", xlab = "HD")
+```
+
+Another way of producing the boxplots
+```{r}
+boxplot(fram_data$SBP~fram_data$HD, ylab ="SBP", xlab = "HD")
+```
+
+Next we explore how proportions of HD = 1 relate to SBP
+
+Standard plots:
+```{r}
+plot(fram_data$SBP,
+     fram_data$HD,
+     col=fram_data$HD, 
+     xlab = "SBP", 
+     ylab = "HD")
+legend("topright",
+       legend=c("0", "1"),
+       lty=c(1,1),
+       lwd=c(2,2),
+       col=unique(fram_data$HD))
+```
+
+Problems: many observations are over-plotted so they are not visible.
+
+Solutions: use jitter() to spread out the observations with similar SBP values.
+```{r}
+plot(jitter(as.numeric(fram_data$HD), factor=.5) ~ fram_data$SBP,
+     pch=4,
+     col=fram_data$HD,
+     ylab="HD",
+     xlab="SBP")
+legend("topright", legend=c("0", "1"),
+       lty=c(1,1), lwd=c(2,2), col=unique(fram_data$HD))
+```
+It's still hard to tell the proportion of each category given `SBP`.
+
+
+Alternatively we could use stripchart() as follows:
+```{r}
+stripchart(fram_data$SBP~fram_data$HD, method="jitter", 
+           col=c("black", "red"), pch=4,
+           ylab="HD", xlab="HB") 
+legend("topright", legend=c("0", "1"),
+       lty=c(1,1), lwd=c(2,2), col=unique(fram_data$HD))
+```
+
+All the plots above do not show the proportion of "1"'s vs. "0"'s as a function of SBP.
+
+
+## 2. Logistic Regression of HD vs. SBP  
+
+### Logit model
+
+Analogous to liner model in a regular regression,  we model
+
+$$P(Y=1\vert SBP) = \frac{e^{\beta_0 + \beta_1 SBP}}{1+e^{\beta_0+\beta_1 SBP}}$$
+where $\beta_0$ and $\beta_1$ are unknown parameters. 
+
+Immediately we have
+
+i)
+
+$$P(Y=0\vert SBP) = 1-P(Y=1\vert SBP) = \frac{1}{1+e^{\beta_0+\beta_1 SBP}}$$
+
+ii) 
+
+$$\log\left(\frac{P(Y=1\vert SBP)}{P(Y=0\vert SBP)}\right)=\beta_0+\beta_1 \times SBP$$
+**The above function is also termed as logit(P(Y=1|SBP))**
+
+iii) The interpretation of $\beta_1$ is the change in log odds ratio for a unit change in `SBP`.
+
+iv) Prob(Y=1|SBP) is a monotone function of `SBP`. 
+
+
+### Maximum likelihood methods
+
+To estimate the unknown parameters $\beta$'s we introduce Likelihood Function of $\beta_0$ and $\beta_1$ given the data, namely the
+
+**Probability of seeing the actual outcome in the data**: 
+
+Take a look at a piece of the data, randomly chosen from our dataset.  We can then see part of the likelihood function.
+
+
+```{r results=TRUE}
+set.seed(2)
+fram_data[sample(1:1406, 10), c("HD", "SBP")]
+```
+
+We use this to illustrate the notion of likelihood function.
+
+\[\begin{split}
+\mathcal{Lik}(\beta_0, \beta_1 \vert {\text Data}) &= {\text {Prob(the outcome of the data)}}\\
+&=Prob((Y=0|SBP=130), (Y=0|SBP=140), \ldots, (Y=1|SBP=130), \ldots ) \\
+&=Prob(Y=0|SBP=130) \times Prob(Y=0|SBP=140) \times, \ldots, Prob(Y=1|SBP=130), \ldots ) \\
+&= \frac{1}{e^{\beta_0 + 130 \beta_1}}\cdot\frac{1}{e^{\beta_0 + 140\beta_1}}\cdots\frac{e^{\beta_0 + 130 \beta_1}}{1 + e^{\beta_0 + 130 \beta_1}} \dots
+	\end{split}\]
+
+
+**MLE**: The maximizes $\hat \beta_1$ and $\hat \beta_0$ will be used to estimate the unknown parameters, termed as  `Maximum Likelihood Estimators`:
+
+$$\max _{\beta_0, \beta_1} \mathcal{Lik}(\beta_0, \beta_1 \vert Data)$$
+Remark:
+
+- $\hat \beta_0$ and $\hat \beta_1$ are obtained through 
+$\max\log(\mathcal{Lik}(\beta_0, \beta_1 \vert D))$
+
+-  MLE can only be obtained through numerical calculations.  
+
+- `glm()` will be used to do logistic regression.
+It is very similar to `lm()` but some output might be different.
+
+
+The default is logit link in `glm`
+```{r}
+fit1 <- glm(HD~SBP, fram_data, family=binomial(logit))
+```
+
+```{r}
+summary(fit1, results=TRUE)
+```
+
+To see the prob function estimated by glm: 
+
+- logit = -3.66 + 0.0159 SBP
+
+- $P(HD = 1 \vert SBP) = \frac{e^{-3.66+0.0159 \times  SBP}}{1+e^{-3.66+0.0159 \times SBP}}$
+
+- $P(HD = 0 \vert SBP) = \frac{1}{1+e^{-3.66+0.0159 \times SBP}}$
+
+- Notice the prob of Y=1 is an increasing function of `SBP` since $\hat \beta_1 = .0159 > 0$.
+
+- Unfortunately we do not have a nice interpretation of $\beta_1$ over `Prob (Y=1)`. 
+
+```{r}
+par(mfrow=c(1,1))
+plot(fram_data$SBP, fit1$fitted.values, pch=16, 
+     xlab="SBP",
+     ylab="Prob of P(Y=1|SBP)")
+```
+
+
+Alternatively, we can plot the prob through $\frac{e^{-3.66+0.0159 \times SBP}}{1+e^{-3.66+0.0159 \times SBP}}$
+
+```{r}
+x <- seq(100, 300, by=1)
+y <- exp(-3.66+0.0159*x)/(1+exp(-3.66+0.0159*x))
+plot(x, y, pch=16, type = "l",
+     xlab = "SBP",
+     ylab = "Prob of P(Y=1|SBP)" )
+```
+
+
+### Inference for the Coefficients
+
+#### i. Wald intervals/tests (through the MLE's)
+    
+Facts about MLE: 
+    
+* The MLE's are approximately normal and they are unbiased estimators of the $\beta$'s.
+* The standard errors are obtained through information matrix
+* The $z$ intervals and $z$ tests are valid for each $\beta_i$.
+    
+   
+```{r}
+summary(fit1)
+```
+
+
+Usual z-intervals for the coefficient's (output from the summary)
+```{r}
+confint.default(fit1)   
+```
+
+
+#### ii. Likelihood Ratio Tests 
+
+Similar to F tests in OLS (Ordinary Least Squares), we have Chi-Square tests to test if a collective set of variables are not needed.
+
+Here:
+
+$H_0: \beta_{SBP}=0$
+$H_1: \beta_{SBP} \not= 0$
+
+Facts about MLE: **Likelihood Ratio Tests**
+
+- Under the $H_0$, the likelihood ratio (modified with log)
+\[\begin{split}
+\text {Testing stat} = \chi^2 
+& = -2\times \log \frac{\max _{H_1} \mathcal{Lik}(\beta_0, \beta_1 \vert D)}{\max_{H_0} \mathcal{Lik}(\beta_0, \beta_1 \vert D)}\\
+&=-2\log(\mathcal{Lik}_{H_0}) - (-2\log(\mathcal{Lik}_{H_1}))\\
+&\sim \chi^2_{df=1}
+\end{split}\]
+
+- Testing stat = Null Deviance - Residual Deviance. Here Deviance = $-2\log(\mathcal{L})$
+
+- The p-value is done through $\chi^2$ distribution
+$p_{value}=P(\chi^2_{df} > \chi^2)$
+
+- glm() outputs the two terms.
+
+
+
+```{r results=TRUE}
+summary(fit1)  
+```
+
+
+
+
+Notice: 
+
+- Null deviance = 1485.9 
+
+- Residual deviance: 1432.8  
+
+- $\chi^2 = 1485.9-1432.8= 53.1$
+
+
+Get the $\chi^2$ statistic
+```{r}
+chi.sq <- 1485.9-1432.8
+```
+
+$p_{value}$: from the likelihood Ratio test
+```{r}
+pchisq(chi.sq, 1, lower.tail=FALSE)
+```
+
+Or use anova/Anova{car} to get the $\chi ^2$ tests. Here the null hypothesis is that `SBP` is not needed or all (but the intercept) coefficients are 0
+```{r}
+anova(fit1, test="Chisq") # 
+```
+
+Similar to the F-test in lm() set up.
+```{r}
+Anova(fit1)   
+```
+
+**What does a **$\chi^2$** distribution looks like?**
+
+- $\chi_1^{2} = z^2$
+- $\chi_2^{2} = z_1^2 + z_2^2$, $z_1$ and $z_2$ are independently chosen z-scores
+
+Different $\chi^2$ distributions
+```{r}
+par(mfrow=c(2,1))
+hist(rchisq(10000, 2), freq=FALSE, breaks=20)
+hist(rchisq(10000, 20), freq=FALSE, breaks=20)
+```
+
+**When df is getting larger, **$\chi^2$** distribution is approximately normal (why?)**
+
+
+Inverting the likelihood ratio tests we can get confidence intervals for the coefficients. This should be similar to that obtained through Wald or z intervals but they are not the same.
+```{r}
+confint(fit1) 
+```
+
+#### iii. Prediction
+
+To do a prediction based on fit1 we plug in `SBP` value into the prob equation. 
+```{r}
+fit1.predict <- predict(fit1, fram_data.new, type="response")
+fit1.predict
+```
+
+## 3. Multiple Logistic Regression
+
+To avoid problems, we will delete all cases with missing values
+```{r}
+fram_data.f <- na.omit(fram_data)
+```
+
+### a. With all the predictors
+
+
+#### i. Full model
+
+$$logit = \beta_0 + \beta_1 x_1 + \dots + \beta_p x_p$$
+$$P(HD = 1) = \frac{e^{\beta_0 + \beta_1 x_1 + \dots + \beta_p x_p}}{1 + e^{\beta_0 + \beta_1 x_1 + \dots \beta_p x_p}}$$
+
+- MLE's will be obtained through maximize the Lik function
+
+- Wald tests/intervals hold for each coefficient
+
+- Likelihood Ratio tests hold for a set of predictors
+
+
+With all the predictors
+```{r}
+fit2 <- glm(HD~., fram_data.f, family=binomial)
+summary(fit2)
+```
+
+- The prob of Y=1 given all the factors is estimated as 
+$$P(HD = 1) = \frac{e^{-9.33480 + 0.06249 \times AGE + 0.90610 I_{Male} + \dots + 0.01231 \times CIG}}{1 + {e^{-9.33480 + 0.06249 \times AGE + 0.90610 I_{Male} + \dots + 0.01231 \times CIG}}}$$
+
+- Are all the risk factors not useful? Or all the $\beta$'s are 0 (Other then the intercept)
+```{r}
+chi.sq <- 1469-1343
+chi.sq  #126
+```
+
+```{r}
+pvalue <- pchisq(chi.sq, 7, lower.tail=FALSE)
+pvalue
+```
+We reject the null hypothesis with any reasonable small $\alpha$. 
+
+Alternatively we may use anova to get the $\chi^2$ test by fitting the reduced model vs. the full model:
+
+```{r}
+fit0 <- glm(HD~1, fram_data.f, family=binomial) # null 
+```
+
+It works only if two fits use same samples.
+```{r results=TRUE}
+anova(fit0, fit2, test="Chisq") # 
+```
+
+#### ii. Are CIG and FRW not needed?
+
+Use Likelihood Ratio test to see if CIG and FRW are not needed in fit2
+
+```{r}
+fit3 <- update(fit2, .~. -CIG -FRW)
+summary(fit3)
+```
+
+We first calculate the Chi-square stat directly:
+```{r}
+chi.sq.2 <- fit3$deviance-fit2$deviance
+chi.sq.2
+pchisq(chi.sq.2, 2, lower.tail=FALSE) # 0.06194729
+```
+
+We fail to reject the $H_0$ at $p < 0.05$ but we do reject the null at $alpha = .1$ since the p-value is < .1. 
+
+We could use anova...
+```{r}
+anova(fit3, fit2, test="Chisq")    
+```
+
+Once again we don't have evidence to reject the null at 
+
+### b. Model selection
+
+
+#### i. Backward elimination
+
+Backward selection is the easiest (without any packages) if p is not too large. As in lm, we eliminate the variable with the highest p-value.
+
+```{r}
+summary(fit2)
+fit2.1 <- update(fit2, .~. -DBP)
+```
+
+Backward selection by kicking DBP (the one with largest p-value) out
+
+```{r}
+summary(fit2.1)
+```
+
+```{r}
+fit2.2 <- update(fit2.1, .~. -FRW)
+summary(fit2.2)
+```
+
+CIG didn't really add much to decrease the residual deviance
+```{r}
+fit2.3 <- update(fit2.2, .~. -CIG)
+summary(fit2.3)
+```
+
+Prediction for the subject using fit2.3
+```{r}
+fit2.3.predict <- predict(fit2.3, fram_data.new, type="response")
+fit2.3.predict
+```
+Notice the difference between the predictions among fit2.3 and fit1!!!
+
+0.11 based on SBP alone!
+```{r}
+predict(fit1, fram_data.new, type="response") # 
+```
+
+
+#### ii. AIC through bestglm()
+
+$$AIC = - 2\log(\mathcal{L}) + 2d$$
+Where $d$: total number of the parameters. We are looking for a model with small AIC.
+
+All predictors
+```{r}
+fit2 <- glm(HD~., fram_data.f, family=binomial)
+summary(fit2)
+```
+
+In fit2: 
+Residual Deviance= $-2\log(\mathcal{L})$, so 
+AIC = $-2\log(\mathcal{L}) + 2d$
+    = Residual deviance + 2*8
+    = 1343.1 + 16 = 1359.1
+
+Which model(s) gives us the smallest AIC?
+
+**bestglm()** will be used
+ 
+- the syntax is similar to that from leaps.
+- we know less well about bestglm comparing with that of regsubsets
+
+Get the design matrix without 1's and HD.
+```{r}
+Xy <- model.matrix(HD ~.+0, fram_data.f) 
+```
+
+Attach y as the last column.
+```{r}
+Xy <- data.frame(Xy, fram_data.f$HD)   
+```
+
+```{r}
+str(Xy)
+```
+
+```{r}
+fit.all <- bestglm(Xy, family = binomial, method = "exhaustive", IC="AIC", nvmax = 10)
+names(fit.all)
+```
+
+List the top 5 models. In the way any one of the following model could be used. 
+```{r}
+fit.all$BestModels  
+```
+
+
+
+Fit the best model which is the same as
+```{r}
+summary(fit.all$BestModel)
+```
+
+```{r}
+summary(glm(HD~AGE+SEX+SBP+CHOL+FRW+CIG, family=binomial, data=fram_data.f))
+```
+
+
+#### iii. More models
+
+- Extend models to include iterations
+
+Are there interaction effects of SBP by SEX? or AGE by SEX? 
+```{r}
+Anova(glm(HD ~ AGE + SBP + SEX + SBP*SEX + AGE * SEX, fram_data, family = binomial))
+```
+
+- What about a model treating CIG as a categorical variable?
+
+

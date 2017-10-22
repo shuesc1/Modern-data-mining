@@ -1,0 +1,51 @@
+---
+title: "R Review"
+author: "Joseph Haymaker"
+date: "10/18/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+## Exploratory Data Analysis (EDA)
+
+```{r}
+fram_data <- read.csv("Framingham.dat", sep=",", header = T, as.is = T)
+fram_data # show all data
+names(fram_data) # column names
+fram_data$AGE # prints out column values
+str(fram_data) # displays internal STRucture of obj
+summary(fram_data)
+tail(fram_data, 10) # tail rows
+sum(is.na(fram_data)) # number of null values
+hd_data.f <- na.omit(hd_data) # create new data frame omitting null entries
+sum(is.na((hd_data.f))) # now 0
+table(hd_data.f$SEX) # table of data
+hd_data.f$SEX <- as.factor(hd_data.f$SEX)
+table(hd_data.f$SEX)
+hd_data.f$SEX
+
+```
+

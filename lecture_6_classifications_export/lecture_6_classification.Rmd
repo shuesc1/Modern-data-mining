@@ -1,0 +1,750 @@
+---
+title: "Classifications"
+author: ""
+date: ""
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, results = "hide", fig.width=6, fig.height=4)
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(pROC, leaps, car, tidyverse, mapproj, caret)
+```
+
+\tableofcontents
+
+\pagebreak
+
+## Introduction
+
+This lecture consists of materials that are either scattered in the text book or not even covered in the book. You will need to rely on my lecture.
+
+Table of Contents
+
+1. Classification rules: thresholding $p(y=1 \vert x)$
+2. Misclassification errors
+    a. Sensitivity
+    b. Specificity (False Positive)
+    c. Misclassification errors
+    d. ROC (Receiver Operating Characteristic) curves and AUC (Area Under the Curve)
+    e. Positive prediction
+    f. Negative prediction 
+3. Classifier with more predictors
+4. Bayes rules
+    + Unequal costs
+    + Weighted Misclassification Errors
+5. Comparing classifiers using Testing errors
+
+### Case Study: Framingham Heart Study.
+
+The goal is to classify a person being `HD=1` or `HD=0` given a set of conditions.
+
+To be more specific:
+
+1. Given a person with the following features:
+
+<center>
+|AGE|SEX   |SBP|DBP|CHOL|FRW|CIG|
+|---|---   |---|---|----|---|---|
+|45 |FEMALE|100|80 |180 |110|5  |
+</center>
+
+We want to classify her to be `HD=1` or `HD=0`.
+
+2. Evaluate a classification rule.
+
+
+Data: 1,406 health professionals.  Conditions gathered at the beginning of the study (early 50s).  Both the original subjects and their next generations have been included in the study.
+
+Read Framingham data/ Clean it little bit.
+
+```{r}
+data <- read.table("Framingham.dat", sep=",", header=T, as.is=T)
+```
+
+Renames, setting the variables with correct natures.
+```{r}
+names(data)[1] <- "HD"
+data$HD <- as.factor(data$HD)
+data$SEX <- as.factor(data$SEX)
+```
+
+The female whose HD will be predicted.
+```{r}
+data.new <- data[1407,]
+```
+
+Take out the last row
+```{r}
+data <- data[-1407,]
+```
+
+##  1. Classification rules: thresholding p(y=1|x)
+
+Use Logistic regression model to estimate the probabilities.  Classify subjects into "1" or "0" by setting a threshold on probabilities of `y = 1`.  
+
+### Classifier 1: Logistic Regression with SBP alone
+
+For simplicity, let us start with only SBP. We first fit a logistic regression model:
+```{r}
+fit1 <- glm(HD~SBP, data, family=binomial(logit))
+summary(fit1)
+```
+
+
+#### Rule 1: Threshold probability by 2/3
+
+$$\hat Y=1 ~~~~ \text{if} ~~~~ \hat p(y=1 \vert SBP) > \frac{2}{3}.$$
+Plugging in the estimated probability, this is same to say we will classify a person being $Y=1$ if 
+
+$$\hat Y=1 ~~~~ \text{if} ~~~~ \frac{e^{-3.66+.0159\cdot SBP}}{1+e^{-3.66+.0159\cdot SBP}} > \frac{2}{3}.$$
+
+####  Linear boundary 
+
+Or we could obtain the above rule by
+
+$$ \hat Y=1 ~~~~ \text{if} ~~~~ \log (\text{odds ratio})= -3.66+.0159 \cdot SBP > \log (\frac{2/3}{1/3}) = \log 2$$
+The linear inequality:
+
+$$-3.66 + 0.0159 \cdot SBP > \log(2)$$
+
+A simple math manipulation:
+
+$$\hat Y=1 ~~~~ \text{if} ~~~~ SBP > \frac{\log(2)+3.66}{.0159}=273.78$$
+
+This is called the classification boundary. 
+
+Let's plot the classifier boundary
+
+```{r}
+par(mfrow=c(1,1))
+plot(jitter(as.numeric(data$HD)-1, factor=1) ~ data$SBP, 
+     pch=as.numeric(data$HD)+2, col=data$HD, 
+     ylab="Obs'n", xlab="SBP")
+abline(v=273.78, lwd=5, col="blue")
+title("All the subjects on the right side
+      will be classified as HD=1")
+legend("topleft", legend=c("0", "1"), pch=c(3,4),
+       col=unique(data$HD))
+```
+
+Based on the about linear boundary, we classify everyone as $\hat Y=1$ if their SBP is on the right side of the vertical line!
+
+
+#### Rule 2: Threshold probability by 1/2
+
+$$\hat y= 1 ~~~~ \text{if} ~~~~ P(y=1 \vert SBP) > .5$$
+
+To get the boundary, we set
+
+$$\log(odds\space ratio)=-3.66+0.0159SBP=\log \left(\frac{\frac{1}{2}}{\frac{1}{2}} \right) = \log(1) = 0$$
+
+or 
+$$\hat y = 1 ~~~~ \text{if} ~~~~ SBP > \frac{3.66}{0.0159}=230.18$$
+
+
+Let us display the linear boundaries for both rules:
+```{r}
+par(mfrow=c(1,1))
+plot(jitter(as.numeric(data$HD)-1, factor=1) ~ data$SBP, 
+     pch=as.numeric(data$HD)+2, col=data$HD, 
+     ylab="Obs'n", xlab="SBP")
+legend("topleft", legend=c("0", "1"), pch=c(3,4), 
+       col=unique(data$HD))
+
+abline(v=273.78, lwd=5, col="blue")
+abline(v=230.4, lwd=5, col="red")
+title("Two classifiers based on SBP: red:prob>.5,
+      blue: prob>2/3")
+```
+
+
+## 2. Misclassification errors
+
+Criteria used to evaluate performance of a rule and a classifier.
+
+a. Sensitivity
+b. Specificity (False Positive)
+c. Misclassification errors
+d. ROC curves and AUC
+e. Positive Prediction
+f. Negative Prediction 
+
+
+### a. Sensitivity
+
+$$P(\hat Y = 1 \vert Y=1)$$
+
+Not an error. This is also called `True Positive Rate`: The proportion of corrected positive classification given the status being positive.
+
+
+### b. Specificity / False Positive
+
+#### Specificity
+
+$$P(\hat Y = 0| Y=0)$$
+`Specificity`: The proportion of corrected negative classification given the status being negative.
+
+#### False Positive
+
+$$1 - Specificity = P(\hat Y=1 \vert Y=0)$$
+
+`False Positive`: The proportion of wrong classifications among given the status being negative. 
+
+### c. Misclassification error
+
+Mean values of missclassifications
+
+$$MCE= \frac{1}{n} \sum_{i=1}^n \{\hat y_i \neq y_i\}$$
+
+We can get all those quantities through confusion matrix or directly find the misclassification errors.
+
+#### Confusion matrix
+
+Let us first prepare all the predicted values:
+```{r}
+fit1.pred.67 <- rep("0", 1406)   # prediction step 1: set up all values to be "0"
+fit1.pred.67[fit1$fitted > 2/3] <- "1"  # prediction step 2 to get a classifier
+fit1.pred.67 <- as.factor(fit1.pred.67) # make this \hat y
+fit1.pred.67 <- ifelse(fit1$fitted > 2/3, "1", "0")  # alternative way to assign \hat y
+```
+
+
+Take a few people in the data, we compare the truth and the predictions:
+```{r}
+set.seed(1)
+output1 <- data.frame(data$HD, fit1.pred.67, fit1$fitt)[sample(1406, 10),] 
+names(output1) <- c( "Y", "Predicted Y", "Prob" )
+output1
+```
+We see there are three mislabels.
+
+
+**Confusion matrix**: a 2 by 2 table which summarize the number of mis/agreed labels
+```{r, results="show"}
+cm.67 <- table(fit1.pred.67, data$HD) # confusion matrix: 
+cm.67
+```
+Here: the rows: $\hat y$ and the columns: $y$. 
+
+
+```{r}
+sensitivity <- cm.67[2,2]/sum(data$HD == "1")  # 1/311
+sensitivity
+```
+
+
+```{r}
+specificity <- cm.67[1,1]/ sum(data$HD == "0")
+false.positive <- cm.67[2,1]/sum(data$HD == "0")  # 5/1095
+false.positive
+```
+
+
+Misclassification error (MCE)
+```{r}
+error.training <- (cm.67[1,2]+cm.67[2,1])/length(fit1.pred.67)
+error.training
+```
+
+
+An alternative formula to get misclassification error
+```{r}
+sum(fit1.pred.67 != data$HD)/length(fit1.pred.67)
+```
+
+```{r}
+mce.67 <- mean(fit1.pred.67 != data$HD)
+mce.67
+```
+
+##### confusionMatrix()
+
+We can use confusionMatrix() from the `caret` package to get the confusion table, accuracy (MCE), sensitivity, specificity, and etc.
+
+```{r}
+confusionMatrix(data = fit1.pred.67,                   # predicted value
+                reference = data$HD,                   # true results as reference
+                positive = levels(fit1.pred.67)[2])    # the positive result
+
+confusionMatrix(data = cm.67,                          # the confusion table
+                positive = levels(fit1.pred.67)[2])    # the positive result
+```
+
+Rule 2: 
+
+$$\hat y= 1 ~~~~ \text{if} ~~~~ P(y=1 \vert SBP) > .5$$
+
+**Predicted values:** 
+```{r}
+fit1.pred.5 <- rep("0", nrow(data))
+fit1.pred.5[data$SBP > 230.18] <- "1"  # Notice a different way of doing so.
+fit1.pred.5 <- as.factor(fit1.pred.5)
+```
+
+**Confusion matrix:**
+```{r}
+confusionMatrix(data = fit1.pred.5, 
+                reference = data$HD, 
+                positive = levels(data$HD)[2])
+```
+
+Notice the trade offs between Sensitivity and False Positive Rate when we change the thresholding numbers. 
+
+
+### d.  ROC curve and AUC:
+
+For each model or process, given a threshold, or a classifier,  there will be a pair of sensitivity and specificity. By changing the thresholds we may plot all the pairs of False Positive as x-axis and  and True Positive as y-axis to have a curve: ROC. We use this ROC curve to measure the performance of such a classifier. 
+
+We use `roc` function from package `pROC` to obtain detailed information for each classifier.  Notice the ROC curve here is Sensitivity vs. Specificity. Most of the ROC is drawn using False Positive rate as x-axis. 
+
+`roc()` outputs information needed for each threshold number.
+
+**Plotting ROC curve:*
+```{r}
+fit1 <- glm(HD~SBP, data, family=binomial(logit))
+fit1.roc <- roc(data$HD, fit1$fitted, plot=T, col="blue")
+```
+```{r}
+names(fit1.roc)  # output from roc
+```
+
+
+False Positive vs. Sensitivity curve is plotted in most ROC curves:
+
+```{r}
+plot(1-fit1.roc$specificities, fit1.roc$sensitivities, col="red", pch=16,
+     xlab="False Positive", 
+     ylab="Sensitivity")
+```
+
+
+`AUC`: Area under the curve. It is also used to measure the performance of the classifier as a whole: the larger the better.
+```{r}
+names(fit1.roc)  # output from roc
+fit1.roc$auc 
+auc(fit1.roc)
+### if you get "Error in rank(prob) : argument "prob" is missing, with no default"
+### then it is possible that you are using the auc() in glmnet
+### use pROC::auc(fit1.roc) to specify we want to use auc() in pROC
+```
+
+
+We can get more from fit1.roc. For example a curve shows the probability thresholds used and the corresponding False Positive rate. 
+```{r}
+plot(fit1.roc$thresholds, 1-fit1.roc$specificities,  col="green", pch=16,  
+     xlab="Threshold on prob",
+     ylab="False Positive",
+     main = "Thresholds vs. False Postive")
+```
+
+
+### e. Positive Prediction
+
+Positive Prediction is a measure of the accuracy given the predictions.
+
+Positive Prediction = $P(Y=1 | \hat Y = 1)$
+
+For fit1.5, recall the confusion matrix being
+```{r}
+cm.5 <- table(fit1.pred.5, data$HD)
+cm.5
+```
+
+```{r}
+positive.pred <- cm.5[2, 2] / (cm.5[2, 1] + cm.5[2, 2])
+positive.pred
+```
+
+### f. Negative Prediction 
+
+Negative Prediction = $P(Y = 0 | \hat Y = 0)$
+
+```{r}
+negative.pred <- cm.5[1, 1] / (cm.5[1, 1] + cm.5[1, 2])
+negative.pred
+```
+
+We will do more about positive prediction and negative prediction in homework.
+
+## 3. Classifier with more predictors
+
+### Classifier 2: Logistic Regression with two predictors
+
+The classification rules can be easily extended to include more predictors.
+
+For example if we take more features: `AGE` and `SBP` we will have different set of rules:
+
+- Fit the logistic regression with `AGE` and `SBP`
+- Get a set of rules by thresholding the estimated probability as a function of the predictors
+- Evaluate the performance of the set of rules using one criterion of your choice
+
+Let's go through the exercise:
+
+1. Get the logit function and examine some specific rules
+```{r}
+fit2 <- glm(HD~SBP+AGE, family= binomial, data)
+summary(fit2)
+```
+
+$$logit=-6.554+0.0144SBP+.0589AGE$$
+
+**Rule 1:** threshold the probability at 0.67 
+
+$$SBP=\frac{-0.0589}{0.0144} Age + \frac{\log(2)+6.554}{0.0144}$$
+
+$$SBP=-4.09 Age+503,$$ this is called linear boundary
+
+$$\hat Y = 1\space if\space SBP > -4.09 Age+503$$
+
+
+**Rule 2:** threshold the probability at 0.5
+$$-6.554+0.0144SBP+.0589Age = log(1)$$
+
+$$SBP=-4.09 Age+455$$
+
+Let's put two linear boundaries together.
+```{r}
+plot(jitter(data$AGE, factor=1.5), data$SBP, col=data$HD, 
+     pch=as.numeric(data$HD)+2,
+     xlab="AGE", ylab="SBP")
+legend("topleft", legend=c("Linear Boundary for .5", "Linear Boundary for 2/3"),
+       lty=c(1,1), lwd=c(2,2), col=c("red", "blue"))
+abline(a=455, b=-4.09, lwd=3, col="red")
+abline(a=503, b=-4.09, lwd=3, col="blue")
+title("Linear Boundares. Red: threshod at .5, Blue: at 2/3")
+```
+
+**Remarks:**
+
+- Trade off between the Sensitivity vs. False Positive
+- The larger the thresholds are the higher Sensitivity by larger False Postie as well
+
+
+We can get sensitivity, false positive rate and MCE for each rules.
+
+
+Here is the ROC curve based on fit2
+```{r}
+fit2.roc <- roc(data$HD, fit2$fitted, plot=TRUE)
+auc(fit2.roc)   #.654
+names(fit2.roc)  
+data.frame(fit2.roc$thresh, fit2.roc$sen, fit2.roc$spe)[1: 10, ]
+```
+
+Take a look at a few rows of fit2.roc
+```{r}
+length(fit2.roc$thresholds)
+```
+
+```{r}
+length(fit1.roc$thresholds)
+```
+
+**Why do the numbers of threshods differ?**
+
+### Compare two classifiers
+
+We could use `ROC` together with `AUC` to compare the two classifiers based on fit1 and fit2. We overlay the two ROC's
+```{r}
+plot(1-fit1.roc$specificities, fit1.roc$sensitivities, col="red", pch=16, cex=.7, 
+     xlab="False Positive", 
+     ylab="Sensitivity")
+points(1-fit2.roc$specificities, fit2.roc$sensitivities, col="blue", pch=16, cex=.6)
+title("Blue line is for fit2, and red for fit1")
+```
+
+```{r}
+auc(fit1.roc)
+auc(fit2.roc)
+```
+
+Questions: 
+
+-a) Which model should we use???? Depends on the goal.
+
+-b) If we care about overall performance for each threshold we may choose fit2.
+
+-c) Warning: the ROC curves produced so far are all **In Sample Performance** evaluation. 
+
+-d) You may try a quadratic boundary with SBP and AGE. Would this be always better comparing with fit2 in terms of ROC/AUC?
+
+Try this:
+
+```{r}
+fit2.square <- glm(HD ~ SBP + AGE + I(SBP^2), family= binomial, data)
+```
+
+## 4. Bayes rule with unequal losses
+
+Given a classifier, what threshold should we use so that the MCE will be minimized? The answer would be using $0.5$ as the threshold number, assuming we treat each mistake the same. On the other hand if the two type of the mistakes cost differently we ought to weigh the type of the mistake. 
+
+We first define the loss function. One simple way to start is:
+
+Let $a_{1,0}=L(Y=1, \hat Y=0)$, the loss (cost) of making an "1" to a "0"
+
+Let $a_{0,1}=L(Y=0, \hat Y=1)$, the loss of making a "0" to an "1"
+
+Let $a_{0, 0} = a_{1, 1}=0$
+
+Then 
+$mean(L(Y, \hat Y=1))=P(Y=1) * L(Y=1, \hat Y=1) + P(Y=0) * L(Y=0, \hat Y=1) =a_{0,1} * P(Y=0)$
+
+Similarly, 
+$mean(L(Y, \hat Y=0))=a_{1,0} * P(Y=1)$
+
+To minimize the two mean losses, we choose 
+$\hat y=1 ~~~~ \text{if} ~~~~ mean(L(Y, \hat Y=1)) < mean(L(Y, \hat Y=0))$
+
+lugging in: 
+$a_{0,1} * P(Y=0) < a_{1,0} * P(Y=1)$
+
+We have the following optimal rule: 
+
+$$\hat y=1 ~~~~ \text{if} ~~~~ \frac{P(Y=1 \vert x)}{P(Y=0\vert x)} > \frac{a_{0,1}}{a_{1,0}}$$
+
+OR
+
+$$P(Y=1 \vert x) > \frac{\frac{a_{0,1}}{a_{1,0}}}{1 + \frac{a_{0,1}}{a_{1,0}}}$$
+
+The above rule is called **Bayes' rule**.
+
+An example: Suppose $\frac{a_{0,1}}{a_{1,0}}=\frac{1}{5}=0.2$, then the Bayes rule is the one thresholds over the $prob(Y=1 \vert x) > \frac{0.2}{(1+0.2)}=0.17$ or
+
+$logit > \log(\frac{0.17}{0.83})=-1.59$ gives us the Bayes rule!!!
+
+For classifier based on the `SBP` and `AGE`
+```{r}
+fit2 <- glm(HD~SBP+AGE, data, family=binomial)
+summary(fit2)
+```
+
+The Bayes rule will have the following linear boundary: 
+
+$-6.554+0.0144SBP+.0589Age \geq -1.59$
+
+$0.0144SBP+.0589Age \geq -1.59+6.554$
+
+$SBP \geq -4.09Age + 344.7 $
+
+Let's draw the linear boundary of the Bayes rule when $\frac{a_{1,0}}{a_{0,1}}=5$
+
+```{r}
+plot(jitter(data$AGE, factor=1.5), data$SBP, col=data$HD, 
+     pch=as.numeric(data$HD)+2,
+     xlab="AGE", ylab="SBP")
+legend("topleft", legend=c("HD=1", "HD=0"),
+       lty=c(1,1), lwd=c(2,2), col=c("red", "black"))
+abline(a=344.7, b=-4.09, lwd=5, col="red")
+title("Linear Boundary of the Bayes Rule, when a10/a01=5")
+```
+
+Finally we get the weighted misclassification error (may not be a number between 0 and 1)
+
+$$MCE=\frac{a_{1,0} \sum 1_{\hat y = 0 | y=1} + a_{0,1} \sum 1_{\hat y = 1 | y=0}}{n}$$
+
+Get the classes first
+```{r}
+fit2.pred.bayes <- rep("0", 1406)
+fit2.pred.bayes[fit2$fitted > .17] = "1" 
+```
+
+```{r}
+MCE.bayes=(sum(5*(fit2.pred.bayes[data$HD == "1"] != "1")) 
+           + sum(fit2.pred.bayes[data$HD == "0"] != "0"))/length(data$HD)
+MCE.bayes
+```
+
+  
+On the other hand if we were to use 1/2 as the prob threshold then the weighted loss would be
+```{r}
+fit2.pred.5 <- rep("0", 1406)
+fit2.pred.5[fit2$fitted > .5] <- "1" 
+MCE.5 <- (sum(5*(fit2.pred.5[data$HD == "1"] != "1")) + sum(fit2.pred.5[data$HD == "0"] != "0"))/length(data$HD)
+MCE.5
+```
+
+Calculate MCE for fit1 with $\frac{a_{1,0}}{a_{0,1}}=5$
+```{r}
+fit1.pred.bayes <- rep("0", 1406)
+fit1.pred.bayes[fit1$fitted > .17] <- "1" 
+MCE.fit1 <- (sum(5*(fit1.pred.bayes[data$HD == "1"] != "1")) + sum(fit1.pred.bayes[data$HD == "0"] != "0"))/length(data$HD)
+MCE.fit1
+```
+
+Alternatively
+```{r}
+fit2.pred.5 <- factor(ifelse(fit2$fitted > .5, "1", "0"))
+MCE.5 <- (sum(5*(fit2.pred.5[data$HD == "1"] != "1")) + sum(fit2.pred.5[data$HD == "0"] != "0"))/length(data$HD)
+MCE.5
+```
+ 
+Comparing the two Bayes rules for classifier 1 and classifier 2 they seem to be comparable. 
+
+## 5. Compare classifiers using testing data
+
+Depending on the goal, we need to choose a criterion. Then to evaluate the performance, we use testing data. 
+
+We may split the data into two sub-samples.
+
+* Training Data: fit a model
+* Testing Data: estimate the performance
+
+Choose the model by some criterion. For example, the one with the largest AUC 
+
+1) Read the data
+```{r}
+data <- read.table("Framingham.dat", sep=",", header=T, as.is=T)
+```
+
+Change the variable name
+```{r}
+names(data)[1] <- "HD"
+```
+
+Set HD and SEX to be factors
+```{r}
+data$HD <- as.factor(data$HD) 
+```
+
+```{r}
+data$SEX <- as.factor(data$SEX)
+```
+
+Take the last row out
+```{r}
+data <- data[-nrow(data), ]  # take the last row out
+dim(data)
+```
+
+2) Split the data:
+```{r}
+data1 <- na.omit(data)
+N <- length(data1$HD)
+N
+```
+
+```{r}
+set.seed(10)
+```
+
+Take a random sample of n=1000 from 1 to N=1393
+```{r}
+index.train <- sample(N, 1000)
+```
+
+Set the 1000 randomly chosen subjects as a training data
+```{r}
+data.train <- data1[index.train,]
+```
+
+The remaining subjects will be reserved for testing purposes
+```{r}
+data.test <- data1[-index.train,] 
+```
+
+```{r}
+dim(data.train)
+dim(data.test)
+```
+
+3) Let us compare two models with testing data
+```{r}
+fit1.train <- glm(HD~SBP, data=data.train, family=binomial)
+summary(fit1.train)
+```
+
+```{r}
+fit5.train <- glm(HD~SBP+SEX+AGE+CHOL+CIG, data=data.train, family=binomial)
+summary(fit5.train)
+```
+
+Get the fitted probabilities using the testing data
+```{r}
+fit1.fitted.test <- predict(fit1.train, data.test, type="response")
+fit5.fitted.test <- predict(fit5.train, data.test, type="response")
+```
+
+```{r}
+data.frame(fit1.fitted.test, fit5.fitted.test)[1:20, ]
+```
+Look at the first 20 rows. Notice that row names are the subject number chosen in the testing data. The estimated probability for each row is different using `fit1` and `fit5`.
+
+Compare the performances with the testing data
+```{r}
+fit1.test.roc <- roc(data.test$HD, fit1.fitted.test, plot=T)
+fit5.test.roc <- roc(data.test$HD, fit5.fitted.test, plot=T)
+```
+
+Overlaying the two ROC curves using testing data
+```{r}
+plot(1-fit5.test.roc$specificities, fit5.test.roc$sensitivities, col="red", pch=16,
+     xlab=paste("AUC(fit5.test) =",
+                round(auc(fit5.test.roc),2),
+                "  AUC(fit1.test) =",
+                round(auc(fit1.test.roc),2) ), 
+     ylab="Sensitivities")   # For some reason it needs a return here?
+
+points(1-fit1.test.roc$specificities, fit1.test.roc$sensitivities, col="blue", pch=16)
+legend("topleft", legend=c("fit5.test w five variables", "fit1.test w one variable"),
+       lty=c(1,1), lwd=c(2,2), col=c("red", "blue"))
+title("Comparison of two models using testing data")
+```
+
+Conclusion: we will use `fit5` for its larger testing AUC curve.
+
+Note: If you comment out set.seed and repeat running the above training/testing session, what will you observe from the two ROC curves and the two AUC values?
+
+Are you surprised?
+
+```{r, eval=F}
+for(i in 1:10) {
+  # set seed
+  set.seed(10*i)
+  
+  # split data
+  index.train <- sample(N, 1000)
+  data.train <- data1[index.train,]
+  data.test <- data1[-index.train,] 
+  
+  # fit
+  fit1.train <- glm(HD~SBP, data=data.train, family=binomial)
+  fit5.train <- glm(HD~SBP+SEX+AGE+CHOL+CIG, data=data.train, family=binomial)
+  
+  # predict
+  fit1.fitted.test <- predict(fit1.train, data.test, type="response")
+  fit5.fitted.test <- predict(fit5.train, data.test, type="response")
+  
+  # roc
+  fit1.test.roc <- roc(data.test$HD, fit1.fitted.test)
+  fit5.test.roc <- roc(data.test$HD, fit5.fitted.test)
+
+  # plot
+  plot(1-fit5.test.roc$specificities, fit5.test.roc$sensitivities, col="red", pch=16,
+     xlab=paste("AUC(fit5.test) =",
+                round(auc(fit5.test.roc),2),
+                "  AUC(fit1.test) =",
+                round(auc(fit1.test.roc),2) ), 
+     ylab="Sensitivities")   # For some reason it needs a return here?
+
+  points(1-fit1.test.roc$specificities, fit1.test.roc$sensitivities, col="blue", pch=16)
+  legend("topleft", legend=c("fit5.test w five variables", "fit1.test w one variable"),
+         lty=c(1,1), lwd=c(2,2), col=c("red", "blue"))
+  title("Comparison of two models using testing data: one with x1, the other with x1-x5")
+  
+  # pause for one second
+  Sys.sleep(1)
+}
+```
