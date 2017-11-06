@@ -1,0 +1,532 @@
+---
+title: "Midterm Solutions"
+subtitle: STAT 471/571/701
+graphics: yes
+date: "Nov 1, 2016, 6 - 8:10 PM"
+output:
+  pdf_document:
+    keep_tex: yes
+    toc: yes
+    toc_depth: 1
+# header-includes:    Do remove these headers to avoid problems
+# - \usepackage{fancyhdr}
+# - \pagestyle{fancy}
+# - \fancyfoot[CO,CE]{}
+# - \fancyfoot[LE,RO]{\thepage}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy=TRUE, fig.width=6,  fig.height=5, fig.align='left', dev = 'pdf')
+library(dplyr)
+library(ggplot2)
+library(magrittr)
+library(car)       # v 2.1-4
+library(glmnet)    # v 2.0-5
+library(dplyr)     # v 0.5.0
+library(GGally)
+```
+
+\vspace{.3in}
+
+**Name:**  ______________________________ 
+
+# Note
+
+These solutions were done pretty quickly, so please excuse my brevity.
+
+\newpage
+
+# Question 1: The College Dropout
+
+Read in the Newsweek dataset. Here are a few lines to aid you. Notice that Penn is in **row 820**. 
+
+```{r, message=FALSE, warning=FALSE}
+# Required libraries - you may add more packages as desired
+library(leaps)  # regsubsets() for model selection
+library(car)    # Anova()
+library(glmnet) # glmnet() and cv.glmnet()
+```
+
+```{r, data prep, results='hide'}
+rm(list=ls()) # Remove all the existing variables
+college_data <- read.csv("USNEWS_graduation_subset.csv")
+college_data$Schooltype <- as.factor(college_data$Schooltype) # 1 - public, 2- private
+str(college_data)
+dim(college_data)
+summary(college_data)
+tail(college_data, 10)
+head(college_data, 20)
+View(college_data)
+# <<<<<<<<<< NA VALUES >>>>>>>>>
+sum(is.na(college_data))
+# show how many NA values in each column
+sapply(college_data, function(x) sum(is.na(x)))
+names(college_data)
+```
+
+We also identify and isolate Penn within this dataset, to use for prediction purposes later.
+
+```{r}
+penn_loc <- which(college_data$Name == "University of Pennsylvania")  # identify Penn
+Penn <- college_data[penn_loc, ]
+Penn
+```
+
+**a)** __How many colleges are included in this dataset? How many variables are there in this data set? List all the variable names. Indicate which variables are categorical variables rather than continuous. Make sure they are treated as factors in `college_data`.__
+
+There are 1042 entries with 13 variables (n > p by a decent margin, which is good) in this data set. Due to the cleaning there are no 'na' values present. 
+
+##### How many colleges are included?
+```{r}
+college_data %>% select(Name) %>% distinct() # get distinct values for state column
+#college_data %>% select(State) %>% distinct() # get distinct values for state column
+# OR
+nrow(college_data)
+
+length(levels(college_data$Name))
+```
+
+1026 distinct colleges represented. 
+
+There are `r nrow(college_data)` colleges. Note that there are `r length(levels(college_data$Name))` different names of colleges - these are colleges with same name in different states. There are two categorical variables in this dataset: `Name` and `State`.
+
+##### How many variables?
+```{r}
+13
+```
+##### List all variable names
+```{r, echo=FALSE}
+names(college_data)
+```
+##### continuous vs. categorical variables
+????
+`Name` and `State`
+
+
+**b)** __Which school has the highest graduation rate, and what is that rate? Which school has the lowest graduation rate, and what is that rate? What was Penn's graduation rate in 1995? What is the mean graduation rate across all schools?__
+
+##### Which school has the highest graduation rate
+```{r}
+#max(college_data$Grad.rate)
+#college_data$name[which.max(college_data$Grad.rate)]
+college_data %>%
+     select(Name, Grad.rate) %>%
+     filter(Grad.rate == max(Grad.rate))
+
+# college_data[which(college_data$Grad.rate == max(college_data$Grad.rate)),] %>%
+#     select(Name, Grad.rate)
+```
+
+There are 10 schools with 100% graduation rate. (It's ok if you only pick up one.)
+
+##### Which school has the lowest graduation rate, and what is that rate?
+```{r}
+college_data %>%
+     select(Name, Grad.rate) %>%
+     filter(Grad.rate == min(Grad.rate))
+```
+The lowest graduation rate belongs to Texas Southern University at 10%.
+
+##### What was Penn's graduation rate in 1995?
+```{r}
+Penn
+college_data %>%
+     select(Name, Grad.rate) %>%
+     filter(Name == 'University of Pennsylvania')
+# OR
+# college_data %>% 
+#     filter(Name == "University of Pennsylvania") %>%
+#     select(Name, Grad.rate)
+```
+Penn's graduation rate:
+
+```{r}
+college_data %>% 
+    filter(Name == "University of Pennsylvania") %>%
+    select(Name, Grad.rate)
+```
+
+##### What is the mean graduation rate across all schools? 
+```{r}
+mean(college_data$Grad.rate)
+
+# OR
+# college_data %>%
+#     summarize(mean_grad = mean(Grad.rate))
+```
+
+61.77543
+
+**c)** Give the histogram of graduation rate and write a very short summary (max 3 sentences) about this distribution.
+
+```{r}
+ggplot(college_data) + geom_histogram(aes(x = Grad.rate), bins = 50, fill = "blue") +
+  labs(title = "Histogram of the graduation rates across universities", x = "Graduation rate", y = "Frequency")
+
+# OR
+# hist(college_data$Grad.rate, breaks = 10)
+
+# OR
+# college_data %>%
+#     ggplot(aes(Grad.rate)) + geom_histogram(bins = 90) +
+#     xlab("Graduation Rate") + ylab("Count") +
+#     ggtitle("Graduation Rate Histogram") + 
+#     theme_bw()
+```
+
+**Assume all linear model assumptions are met in the following analyses.**
+
+# Question 2: School Type and State vs Graduation Rate 
+
+**a)** Make side to side boxplots of **graduation rate** vs **school type**. Does one type seems to have higher a graduation rate compared to the other? Write a short summary (max 3 sentences) of this finding. Does that agree with your intuition about private schools (`Schooltype = 2`) vs. public schools (`Schooltype = 1`)?
+
+```{r}
+# names(college_data)
+college_data %>% ggplot(aes(x = Schooltype, y = Grad.rate)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+  labs(title = "Boxplots of school type versus graduation rate", x = "School type (1-public, 2-private)", y = "graduation rate")
+
+# OR 
+# boxplot(college_data$Grad.rate ~ college_data$Schooltype)
+```
+
+Public schools on left, private schools on right. Private schools appear to have higher graduation rates.
+
+	
+**b)** `fit1`: `Grad.rate` vs. `Schooltype`
+	
+Perform a test to determine if the mean `Grad.rate` between the two school types is different at 0.01 level. Which type has a higher `Grad.rate`? Produce a 95% confidence interval for the mean difference. 
+
+We can perform a t-test:
+
+```{r, echo=T}
+# ISOLATING JUST PRIVATE SCHOOLS
+private_grad_rates <- college_data %>%
+    filter(Schooltype == 2) %>%
+    select(Grad.rate) %>% unlist
+# ISOLATING JUST PUBLIC SCHOOLS
+public_grad_rates <- college_data %>%
+    filter(Schooltype == 1) %>%
+    select(Grad.rate) %>% unlist
+t.test(public_grad_rates, private_grad_rates)
+```
+
+Clarify t-test assumption of normality - looks fine.
+
+```{r}
+par(mfrow = c(1, 2))
+hist(private_grad_rates)
+hist(public_grad_rates)
+```
+
+Then, we can back out the confidence interval via the above summary output:
+
+```
+95 percent confidence interval:
+ -18.88787 -14.75274
+```
+
+You can also do a regression based approach, this is probably the easier one. Note that the results are the same!
+
+```{r}
+fit1 <- lm(Grad.rate ~ Schooltype, data = college_data)
+confint(fit1, parm = 2)
+```
+
+**c)** `fit1.1`: `Grad.rate` vs. `State` 
+ 
+Can we prove that the mean graduation rates are different, at the 0.01 level, among all the states? Which state appears to have the highest graduation rate, and which state appears to have the lowest graduation rate? Note that according to standard R-coding `AK`/Alaska is the base case in this analysis.
+
+__Some states have high p-values, that is, they are not significantly different from Alaska, the base case.__
+
+```{r}
+fit1.1 <- lm(Grad.rate ~ State, data = college_data)
+summary(fit1.1)
+Anova(fit1.1)
+# SORT BY P-VALUE IN DESCENDING ORDER
+summary(fit1.1) %>% broom::tidy() %>%
+    arrange(-p.value) %>% head # - p-value makes it descending
+```
+
+Lowest grad rate states:
+
+```{r}
+# data striated by state, then mean grad rate (ascending order)
+college_data %>% 
+    group_by(State) %>%
+    summarize(grad_rate = mean(Grad.rate)) %>%
+    arrange(grad_rate)
+```
+
+Highest grad rate states:
+
+```{r}
+# striate by state, then mean grad rate (in descending order)
+college_data %>% 
+    group_by(State) %>%
+    summarize(grad_rate = mean(Grad.rate)) %>%
+    arrange(-grad_rate)
+```
+
+**d)** `fit1.2`: `Grad.rate` vs. `Schooltype` and `State`
+	
+Controlling the school type, is the state where the school locates a useful factor at the .01 level?
+
+```{r}
+fit1.2 <- lm(Grad.rate~ Schooltype + State, data = college_data)
+summary(fit1.2)
+Anova(fit1.2)
+# car::Anova(fit1.2)
+```
+
+As shown by the Anova test (type II test), yes, it is very much significant. 
+Yes, as shown clearly in the Anova output, State is significant at under the 0.01 level.
+
+# Question 3: Faculty Effects
+
+The variable `Pct.fac.degree` summarizes the percentage of faculty members who hold higher education degrees.
+
+Construct `fit2`: `Grad.rate` vs. `Pct.fac.degree`
+
+**a)** Report the summary of your linear model. Is `Pct.fac.degree` a significant variable in this model at .05 level? How does `Pct.fac.degree` affect `Grad.rate`?
+
+`Pct.fac.degree` is a significant variable in this model at .05 level. For every percent of faculty members who have a higher degree, it increases graduation rate by 0.34 percent.
+
+```{r}
+fit2 <- lm(Grad.rate ~ Pct.fac.degree, data = college_data)
+summary(fit2)
+```
+
+**b)** Make a scatter plot with $y$ = `Grad.rate` and $x$ = `Pct.fac.degree`. Overlay `fit2` onto the plot.
+
+```{r}
+college_data %>%
+    ggplot(aes(x = Pct.fac.degree, y= Grad.rate)) + geom_point() +
+    geom_abline(slope = 0.334418, intercept = 35.05981) + 
+    xlab("% Faculty w/Higher Degree") + ylab("Graduation Rate") + 
+    theme_bw()
+```
+
+\vspace{.1in}
+
+Construct `fit2.1`: `Grad.rate` vs. `Pct.fac.degree + All.test.std`
+
+```{r}
+fit2.1 <- lm(Grad.rate ~ Pct.fac.degree + All.test.std, data = college_data)
+```
+
+**c)** Is `Pct.fac.degree` still a significant variable in this model at the .05 level?
+
+Yes
+
+```{r}
+summary(fit2.1)
+```
+
+**d)** Interpret the coefficent of `Pct.fac.degree` in `fit2.1`.
+
+This model suggests that it's worse for higher % of faculty members to have higher education degrees. 
+
+**e)** Why might the two estimates of beta for `Pct.fac.degree` differ? 
+
+This new model controls for the 'quality' of students admitted. The two variables under consideration have a high correlation of `r college_data %$% cor(Pct.fac.degree, All.test.std)`, a condition known as collinearity.
+
+# Question 4: Parsimonious Models (all subsets)
+
+Construct `fit3`: a model with all available sensible variables 
+
+```{r}
+fit3 <- lm(Grad.rate ~ . - Name, data = college_data)
+```
+
+Based on fit3, answer the following questions:
+ 
+**a)** Is `State` a significant variable at .01 level after controlling for all other variables in the model? Provide an appropriate test. 
+
+We can do Anova test - State is significant.
+
+```{r}
+car::Anova(fit3)
+```
+
+**b)** If you want to kick one variable out from this model such that the resulting model would have the smallest possible RSS, which variable would you choose, and why?
+
+Kick out instate tuition - variable with smallest F-value / least importance.
+ 
+\vspace{.1in}
+ 
+Remove `State` from the data under consideration but include all other variables. Construct `fit4`: a parsimonious model, using regusubsets with exhaustive search.
+
+```{r}
+colleges_sub <- college_data %>% select(-Name, -State)
+x_col <- model.matrix(Grad.rate ~. , colleges_sub)[, -1]
+y_col <- college_data$Grad.rate
+reg_search <- regsubsets(x_col, y_col, method = "exhaustive")
+```
+
+ 
+**c)** Show the Cp plot and also show the BIC plot. Based on the two plots, which is the most desirable model size? Why?
+
+```{r}
+par(mfrow = c(1, 2))
+plot(summary(reg_search)$bic, main = "BIC Plot")
+plot(summary(reg_search)$cp, main = "CP Plot")
+
+# find min via BIC:
+# which(summary(reg_search)$bic == min(summary(reg_search)$bic))
+# find min via CP:
+# which(summary(reg_search)$cp == min(summary(reg_search)$cp))
+
+```
+
+**d)** Regardless of your answer in c), report the 4-variable model chosen by regsubsets. To save time we will not pursue further.
+
+`All.test.std, App.accept, Total.students, In.tuition`
+ 
+# Question 5: Parsimonious Models (LASSO) 
+ 
+Use LASSO for model selection, again making sure to do so without including the `State` variable in the LASSO process.
+
+**a)** Run `cv.glmnet()` with `set.seed(12)`. Plot `cmv` vs. `lambda`. 
+
+```{r}
+set.seed(12)
+fit_lasso <- cv.glmnet(x_col, y_col, family = "gaussian", alpha = 1)
+plot(fit_lasso, main = "CMV vs Lambda in LASSO")
+```
+
+
+**b)** What is the `lambda.1se` value? Under the `lambda.1se` criterion, list the non-zero variables returned? 
+
+lambda 1se:
+
+```{r}
+fit_lasso$lambda.1se
+```
+
+And we have the following variables in the model:
+
+```{r}
+coefs_1se = coef(fit_lasso, s="lambda.1se")
+rownames(coefs_1se)[which((coefs_1se) != 0)]
+```
+
+
+**c)** `fit5`: Run OLS with all the variables returned from part b), **and with State also included in the model**. Are all the variables included here significant at the .01 level? If not, perform backward elimination (manually) until all the p-values for the remaining variables are less than .01. Show your model building process and report the final LS equations. *Note: for this problem, force State into the final model, i.e., do not remove State.*
+
+```{r}
+fit5 = lm(Grad.rate ~ State + Schooltype + All.test.std + Acc.Rate + 
+              Pct.Yield + In.Tuition + Room.board, 
+          data = college_data)
+```
+
+```{r, eval = F}
+Anova(fit5) 
+
+# remove In.Tuition
+fit5_1 = update(fit5, .~. -In.Tuition)
+Anova(fit5_1) 
+
+# remove Room.Board
+fit5_2 = update(fit5_1, .~. -Room.board)
+Anova(fit5_2) 
+
+# remove Pct.Yield
+fit5_3 = update(fit5_2, .~. -Pct.Yield)
+Anova(fit5_3) 
+
+# remove Acc.Rate
+fit5_4 = update(fit5_3, .~. -Acc.Rate)
+Anova(fit5_4) 
+```
+
+We see that our final model is `Grad.rate` ~ `State + Schooltype + All.test.std` :)
+
+# Question 6: Graduation Evaluation
+
+Independent of Question 5. Assume that this we've decided to use `fit6` as our final model.
+
+`fit6`: `Grad.rate` ~ `State + Schooltype + All.test.std`
+
+```{r}
+fit6 <- lm(Grad.rate ~ State + Schooltype + All.test.std,
+           data = college_data)
+```
+
+
+**a)** Are all three variables significant at .01 level? 
+
+Yep
+
+```{r}
+car::Anova(fit6)
+```
+
+**b)** Provide the residual plot.
+
+```{r}
+plot(fit6$fitted, fit6$residuals)
+```
+
+**c)** Provide the qqnorm plot of the residuals.
+
+```{r, warning=F}
+qqnorm(fit6$residuals)
+qqline(fit6$residuals)
+```
+
+
+**d)** Do the model meet all the linear model assumptions? 
+
+Yeah
+ 
+**e)** Finally, using `fit6`, provide a 95% prediction interval for Penn's graduation rate. Based on Penn's actual graduation rate, how do you think of the performance of our prediction?
+
+```{r}
+predict(fit6, newdata = filter(college_data, Name == "University of Pennsylvania"),
+        interval = "prediction", level = 0.95)
+```
+
+The prediction interval is 74.81 to 123%, which I guess isn't great because our upper bound is over 100%, but is acceptable. Our fit is at 99%, and Penn's real graduation rate is `r college_data %>% filter(Name == "University of Pennsylvania") %>% select(Grad.rate)`, indicating that this school is underperforming our model, but at least taught us enough statistics to get a prediction interval containing the true rate.
+ 
+# Question 7: Freedom of the Press
+
+Newsweek did a great job of collecting graduate data, but some schools are unhappy with their exact graduation figures being reported. They  lobbied Newsweek's publisher to report only whether a school's graduation rate is either High (`Grad.rate >= 70`) or Low (`Grad.rate < 70`); the "journalists" acquiesced to their corporate overlords. From now on, the only graduation rate data available to you is in that high/low form.
+
+**a)** Create a new categorical variable `Grad.rate.2` in `college_data` that fits the new specification. What proportion of the schools are categorized as "High Graduation", that is, `Grad.rate.2 == "1"`?
+
+34.06% of colleges have "high" graduation rates.
+
+```{r}
+college_data %<>%
+    mutate(Grad.rate.2 = as.factor(as.numeric(Grad.rate >= 70)))
+table(college_data$Grad.rate.2) / nrow(college_data)
+```
+
+**b)**  How well can we predict `Grad.rate.2`, with only three variables: `State`, `Schooltype` and `All.test.std`. Run a logistic regression of `Grad.rate.2` vs. `State`, `Schooltype` and  `All.test.std`. Is every variable significant at .01 level, whilst controlling the other two variables?
+
+Each variable is significant at 0.01, while controlling for the other variables.
+
+```{r}
+fit7 <- glm(Grad.rate.2 ~ State + Schooltype + All.test.std, 
+            data = college_data, family = "binomial")
+car::Anova(fit7)
+```
+
+**c)** Let us fix our classification threshold to 0.5, that is, we will classify the school to be "High Graduation" if $\hat{P}$`(Grad.rate.2 == "1") > 0.5` (the estimated probability of being "High Graduation" is greater than 0.5). Under this framework, what is the in-sample mis-classification error? Show your work.
+
+```{r}
+con_mat <- table(fit7$fitted.values > 0.5, college_data$Grad.rate.2)
+
+1 - sum(diag(con_mat)) / nrow(college_data) 
+
+# sum of matrix diagonals is # of correctly predicted values
+# 1 - correct = MCE
+```
+
+\vspace{.5in}
+
+## END 
+
+

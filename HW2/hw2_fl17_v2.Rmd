@@ -189,6 +189,7 @@ The 6 non-zero betas are "x", "I(x^2)", "I(x^3)", "I(x^4)", "I(x^5)", "I(x^7)" w
 coef.min <- coef(fit.cv, s="lambda.min")  
 coef.min <- coef.min[which(coef.min !=0),]   # get the non=zero coefficients
 coef.min  # set of predictors chosen and their coefficients
+rownames(as.matrix(coef.min))
 ```
 
 Now that we know which coefficients to use, we prepare a lm formulae for the fit model.
@@ -520,18 +521,22 @@ data.frame(name = tmp_coeffs@Dimnames[[1]][tmp_coeffs@i + 1], coefficient = tmp_
 attach(data3)
 # names(data3)
 Y <- data3$violentcrimes.perpop # extract Y
+Y
 
 # rows.names <- names(data3)
 # lm.input <- as.formula(paste("violentcrimes.perpop", "~", paste(var.min[-1], collapse = "+"))) 
 # lm.input
 
 X <- model.matrix(violentcrimes.perpop~., data=data3)[, -99]
+X
+colnames(X)
 fit.lambda <- glmnet(X, Y, alpha=1)
 str(fit.lambda)
 fit.lambda$lambda
 plot(fit.lambda)
 #<<<<<<CV to select λ>>>>>>>
 fit.cv <- cv.glmnet(X, Y, alpha=1, nfolds=10 ) 
+names(fit.cv)
 fit.cv$cvm               # the mean cv error for each lambda
 fit.cv$lambda.min #28.51188
 fit.cv$nzero             # number of non-zero coeff's returned for each lambda
@@ -548,10 +553,10 @@ plot(fit.cv)
 # rownames(as.matrix(coef.min)) # shows only names, not estimates -- 15 variables
 
 # using λ=lambda.1se
-# coef.1se <- coef(fit.cv, s="lambda.1se")  
-# coef.1se <- coef.1se[which(coef.1se !=0),] 
-# coef.1se
-# rownames(as.matrix(coef.1se)) # only 3 variables
+ coef.1se <- coef(fit.cv, s="lambda.1se")  
+ coef.1se <- coef.1se[which(coef.1se !=0),] 
+ coef.1se
+ rownames(as.matrix(coef.1se)) # only 3 variables
 
 # using all non-zero coefficients
 # coef.nzero <-coef(fit.cv, nzero = 3) 

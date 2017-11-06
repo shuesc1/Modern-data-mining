@@ -1,0 +1,254 @@
+---
+title: "Midterm Response - Spring 2017"
+subtitle: "Modern Data Mining"
+author: "Ryan Andrews"
+date: "20 March 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# To be safe, be at least R version 3.3.1 
+knitr::opts_chunk$set(echo = TRUE, include = TRUE)
+library(car)       # v 2.1-4
+library(glmnet)    # v 2.0-5
+library(tidyverse)
+```
+
+## Setup and Notes
+
+We provide some glue code to load the data. 
+
+```{r}
+rm(list = ls())
+# exam_data_url <- "https://cdn.rawgit.com/stillmatic/6d065a8d0963c229b1daa61277ff2b60/raw/e7462da3cd1eadf5219e2d26942fc37bb72fd3ef/exam_data_final.csv"
+# county_data <- read.csv(exam_data_url)
+county_data <- read.csv('exam_data_final.csv')
+
+# data is available on canvas too, on the exam assignment page
+# county_data <- read.csv("exam_data_final.csv")
+
+# for windows:
+# library(httr) # v 1.2.1
+# county_data <- httr::content(httr::GET("exam_data_url"))
+```
+
+Submit both this `Rmd` file and a knitted version (`html, pdf, or word`) to Canvas *before* 8 PM sharp!. The  submissions will be closed after 8:00 PM.
+
+You *must* name this file according to the following scheme: `LastName_FirstName_Midterm.rmd`, e.g. `Zhao_Linda_Midterm.rmd`. 
+
+## Part 1: Data Exploration 
+
+### Question 1
+
+**ANSWER:** There are 11 states in the data, as shown below.
+
+```{r}
+# head(county_data)
+county_data %>% select(state) %>% distinct()
+```
+
+### Question 2
+
+**ANSWER:** Both `uninsured` and `poverty_frac` are relatively normally distributed, with the exception of long right tails. This is, of course, bad because are talking about lack of insurance and employment. Some counties have uninsurance rates reaching about 39% and poverty rates reaching 45%. See below.
+
+```{r}
+county_data %>% ggplot(aes(uninsured)) + geom_histogram(bins = 50)
+summary(county_data %>% select(uninsured))
+```
+
+```{r}
+county_data %>% ggplot(aes(poverty_frac)) + geom_histogram(bins = 50)
+summary(county_data %>% select(poverty_frac))
+```
+
+### Question 3
+
+**ANSWER:** Yes, there is evidence that wealth distribution varies. Since we are looking at poverty rate, boxplots that are relatively higher indicate states with more counties with high poverty (i.e., lower wealth). This is noticeable for Georgia, Kentucky, and Texas. Moreover, Texas has several large outliers in poverty rate, suggesting income distribution in Texas is particularly disperse.
+
+```{r}
+county_data %>% ggplot(aes(x = state, y = poverty_frac)) + 
+  geom_boxplot() + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+
+## Part 2: Election Prediction
+
+### Question 1
+
+```{r}
+fit2.1 <- lm(dem12_frac ~ median_income, county_data)
+```
+
+**ANSWER 1a.** Yes, `median_income` is significant at the 5% level. See the ANOVA below.
+
+```{r}
+Anova(fit2.1)
+```
+
+**ANSWER 1b.** Since high median income is the dropped level here, the regression suggests that low and medium median income levels are less likely to vote democractic than high. Interestingly, though, this effect is not monotonic in income level; high income counties are most likely to vote democratic, however low income counties are more likely to vote democraftic than medium.
+
+```{r}
+summary(fit2.1)$coefficients
+```
+
+### Question 2
+
+```{r}
+fit2.2 <- update(fit2.1, . ~ . + state)
+```
+
+**ANSWER 2a.** Yes, `median_income` is still significant at the 5% level. See the ANOVA below.
+
+```{r}
+Anova(fit2.2)
+```
+
+
+**ANSWER 2b.** The effect of `median_income` now differs when controlling for `state`. In a given state, we expect the most likely counties to vote democratic based on median income level to be (in decreasing order) low, high, medium.
+
+```{r}
+summary(fit2.2)$coefficients
+```
+
+
+### Question 3
+
+**ANSWER 3a.** We cannot include `county` because the data does not vary at the county level; there is one county per row. As a result, a model with county would have no degrees of freedom to estimate anything!
+
+We cannot include `rep12_frac` because it is *highly* (negatively) correlated with `dem12_frac`. As shown below it is essentially -100% (it's not because not voting / independent are another choice, though not popular). See below.
+
+```{r}
+county_data %>% ggplot(aes(x = rep12_frac, y = dem12_frac)) + geom_point()
+county_data %>% select(dem12_frac, rep12_frac) %>% cor()
+```
+
+**ANSWER 3b.** First I fit the LASSO model, and find lambda.1se, shown below:
+
+```{r}
+set.seed(34)
+
+X <- model.matrix(dem12_frac ~ . -county -state -rep12_frac, data = county_data)[, -1]
+Y <- county_data$dem12_frac
+
+lasso <- cv.glmnet(x = X, y = Y, alpha = 1, nfolds = 10)
+lasso$lambda.1se
+```
+
+For the model with this lambda, there are 19 nonzero coefficients (intercept excluded) as shown below. Note that two of these coefficients are levels of the categorical `median_income`.
+
+```{r}
+coef_1se <- coef(lasso, s = 'lambda.1se')
+nzcoef   <- rownames(coef_1se)[which((coef_1se) != 0)]
+nzcoef
+```
+
+**ANSWER 3c.** No, not all variables are significant t the 5% level. See below:
+
+```{r}
+formula <- paste(c('dem12_frac ~ median_income', nzcoef[c(-1, -7, -8)]), collapse = ' + ')
+fit3 <- lm(formula, county_data)
+
+Anova(fit3)
+```
+
+
+**ANSWER 3d.** I do backwards elimination by elimintating variables with the smallest F-value until all variables are significant at the 5% level (code chunk excluded to minimize output):
+
+```{r, include = F}
+fit3.1 <- update(fit3, . ~ . -total_votes_12)
+Anova(fit3.1)
+
+fit3.2 <- update(fit3.1, . ~ . -margin_state_08)
+Anova(fit3.2)
+
+fit3.3 <- update(fit3.2, . ~ . -violent_crime)
+Anova(fit3.3)
+
+fit3.4 <- update(fit3.3, . ~ . -median_age)
+Anova(fit3.4)
+
+fit3.5 <- update(fit3.4, . ~ . -infant_mortality)
+Anova(fit3.5)
+```
+
+The final model now includes just 13 variables (`median_income` considered 1 variable):
+
+```{r}
+summary(fit3.5)
+```
+
+**ANSWER 3e.** The assumption of the linear model are generally met. To nitpick, the residuals are slightly overemphasized in the right tail of the distribution, as shown in the Q-Q plot below.
+
+```{r}
+par(mfrow = c(1, 2))
+plot(fit3.5, 1:2)
+```
+
+**ANSWER 3f.** 
+
+In short, I used cross-validated LASSO to identify a baseline model based on lambda.1se criteria. From there, I eliminated variables one-by-one until only significant variables remained (at 5% level).
+
+To summarize the effects, below I indicate whether `dem12_frac` is increasing or decreasing in each variable (specific coefficient estimates available above). Particularly interesting findings are (1) racial effects exists (e.g., caucasian less likely to vote democratic), (2) poor economic indicators (e.g., unemployment, poverty rate) suggest higher democratic voting, and (3) educational attainment (e.g., HS, graduate) suggests higher likeliness to vote democratic.
+
+- `median_income`: Increasing
+- `registered_voters`: Increasing
+- `reg_vote_frac`: Increasing
+- `turnout`: Increasing
+- `hs_diploma_degree`: Increasing
+- `poverty_frac`: Increasing
+- `caucasian_frac`: Decreasing
+- `gini_coefficient`: Decreasing
+- `adult_smoking`: Increasing
+- `uninsured`: Decreasing
+- `unemployment`: Increasing
+- `latino_frac`: Increasing
+- `graduate_degree`: Increasing
+
+Concerns with this model include:
+
+- The model is not very parsimonious as it still contains many variables. To further refine, we might try subsets of the variables and use Cp / BIC to identify a smaller model.
+- Race-related variables are can likely be construed as a linear combination of each other, which could lead to collinearity problems. Ths is because people generally do not identify with multiple races, so we would expect a sum of all of the racial percentages to equal 1. The two race-related variables in the model, for example, have relatively high correlation. See below.
+
+```{r}
+cor(county_data %>% select(caucasian_frac, latino_frac))
+```
+
+- State is excluded, yet it likely a very important factor for identifying democratic voting. States are often though of as party-aligned, and election nights often hinge on how the "swing" states (i.e., not generally party-aligned) are voting.
+
+
+## Part 3 Turnout
+
+### Question 1
+
+```{r}
+fit4 <- lm(turnout ~ margin_state_08, county_data)
+```
+
+**ANSWER 1a.** No, `margin_state_08` does not have a significant effect at the 5% level (nor 10%).
+
+```{r}
+summary(fit4)
+```
+
+**ANSWER 1b.** Yes, we can perform the prediction. Because `margin_state_08` is state-level data (i.e., it does not vary for any county within a state), the data on voter margins in Washington generally is sufficient for the prediction. Note that this also implies that the prediciton for *any* county in Washington with this model would be the same for King.
+
+First I calculate the `margin_state_08` for King (i.e., for Washington):
+
+```{r}
+pred <- data.frame(state = 'Washington', 
+                   county = 'King', 
+                   margin_state_08 = .5765 - .4048)
+pred
+```
+
+We can then predict `turnout`. As shown below, the 95% CI ranges from about 64.8% to 84.5%.
+
+```{r}
+predict(fit4, pred, interval = 'prediction', se = FALSE)
+```
+
+
+## Declaration
+
+By submitting this document you certify that you have complied with the University of Pennsylvania's Code of Academic Integrity, to the best of your knowledge. You further certify that you have taken this exam under its sanctioned conditions, i.e. solely within the set exam room and within the time allotted. 

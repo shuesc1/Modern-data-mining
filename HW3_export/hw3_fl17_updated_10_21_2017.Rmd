@@ -489,9 +489,12 @@ Laws. They govern almost every facet of our daily life: education, environment, 
 ```{r, include=FALSE, results='hide'}
 bill.data.test <- read.csv("Bills.subset.test.csv", header=TRUE, sep=",", na.strings="")
 summary(bill.data.test)
+sapply(bill.data.test, function(x) sum(is.na(x)))
 dim(bill.data.test)
 bill.data.train <- read.csv("Bills.subset.csv", header=TRUE, sep=",", na.strings="")
 dim(bill.data.train)
+# na in each column
+sapply(bill.data.train, function(x) sum(is.na(x)))
 #bill.data.train
 ```
 The provided data had already been split into training and testing data. The training data consists of 15 variables across 7011 entries. With respect to overall data set characteristics, the data come from sessions as far back as 2009 and as recently as 2014. Deciding factors in the outcome of the bill - such as party sponsor, number of co-sponsors, originating committee, etc. - will be used as variables and occupy their own column. 
