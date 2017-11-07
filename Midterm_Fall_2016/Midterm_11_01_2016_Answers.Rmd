@@ -14,7 +14,7 @@ output:
 # - \fancyfoot[CO,CE]{}
 # - \fancyfoot[LE,RO]{\thepage}
 ---
-
+#======================= FALL 2016 ===================
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(tidy=TRUE, fig.width=6,  fig.height=5, fig.align='left', dev = 'pdf')
 library(dplyr)
@@ -56,7 +56,7 @@ dim(college_data)
 summary(college_data)
 tail(college_data, 10)
 head(college_data, 20)
-View(college_data)
+#View(college_data)
 # <<<<<<<<<< NA VALUES >>>>>>>>>
 sum(is.na(college_data))
 # show how many NA values in each column
@@ -291,21 +291,33 @@ Construct `fit2`: `Grad.rate` vs. `Pct.fac.degree`
 
 **a)** Report the summary of your linear model. Is `Pct.fac.degree` a significant variable in this model at .05 level? How does `Pct.fac.degree` affect `Grad.rate`?
 
+```{r}
+fit2 <- lm(Grad.rate~Pct.fac.degree, data = college_data)
+summary(fit2)
+Anova(fit2)
+```
+
 `Pct.fac.degree` is a significant variable in this model at .05 level. For every percent of faculty members who have a higher degree, it increases graduation rate by 0.34 percent.
 
-```{r}
-fit2 <- lm(Grad.rate ~ Pct.fac.degree, data = college_data)
-summary(fit2)
-```
 
 **b)** Make a scatter plot with $y$ = `Grad.rate` and $x$ = `Pct.fac.degree`. Overlay `fit2` onto the plot.
 
 ```{r}
-college_data %>%
-    ggplot(aes(x = Pct.fac.degree, y= Grad.rate)) + geom_point() +
-    geom_abline(slope = 0.334418, intercept = 35.05981) + 
-    xlab("% Faculty w/Higher Degree") + ylab("Graduation Rate") + 
-    theme_bw()
+#fit2
+plot(college_data$Pct.fac.degree, college_data$Grad.rate,
+     pch = 16,
+     xlab = "Percent of faculty with higher education degrees",
+     ylab = "Percent graduation rate",
+     main = "Universities' graduation rates vs. percent of faculty with higher education degrees")
+abline(fit2, col="red", lwd=4)
+abline(h=mean(college_data$Grad.rate), lwd=5, col="blue")
+
+# OR
+# college_data %>%
+#     ggplot(aes(x = Pct.fac.degree, y= Grad.rate)) + geom_point() +
+#     geom_abline(slope = 0.334418, intercept = 35.05981) + 
+#     xlab("% Faculty w/Higher Degree") + ylab("Graduation Rate") + 
+#     theme_bw()
 ```
 
 \vspace{.1in}
@@ -313,31 +325,81 @@ college_data %>%
 Construct `fit2.1`: `Grad.rate` vs. `Pct.fac.degree + All.test.std`
 
 ```{r}
-fit2.1 <- lm(Grad.rate ~ Pct.fac.degree + All.test.std, data = college_data)
+fit2.1 <- lm(Grad.rate~Pct.fac.degree + All.test.std, data = college_data)
+summary(fit2.1)
+Anova(fit2.1)
 ```
-
 **c)** Is `Pct.fac.degree` still a significant variable in this model at the .05 level?
 
 Yes
+**d)** Interpret the coefficent of `Pct.fac.degree` in `fit2.1`.
+D). All else being held equal, a 1% increase in percent of faculty with higher education degrees at a university corresponds with a .08% _decrease_ in graduation rate.
+
+_This model suggests that it's worse for higher % of faculty members to have higher education degrees. _
 
 ```{r}
 summary(fit2.1)
 ```
 
-**d)** Interpret the coefficent of `Pct.fac.degree` in `fit2.1`.
-
-This model suggests that it's worse for higher % of faculty members to have higher education degrees. 
 
 **e)** Why might the two estimates of beta for `Pct.fac.degree` differ? 
+```{r}
+# VARIABLES ARE HIGHLY CORRELATED
+college_data %>% 
+  select_if(is.numeric) %>%
+  select(Pct.fac.degree, All.test.std) %>%
+  ggpairs()
+college_data %>% select(Pct.fac.degree, All.test.std) %>% cor()
+```
 
-This new model controls for the 'quality' of students admitted. The two variables under consideration have a high correlation of `r college_data %$% cor(Pct.fac.degree, All.test.std)`, a condition known as collinearity.
+__This new model controls for the 'quality' of students admitted. The two variables under consideration have a high correlation of `r college_data %$% cor(Pct.fac.degree, All.test.std)`, a condition known as collinearity.__
 
 # Question 4: Parsimonious Models (all subsets)
 
 Construct `fit3`: a model with all available sensible variables 
 
 ```{r}
+# FORWARD SELECTION
+dim(college_data) # n > p
+names(college_data)
+college_data2 <- (college_data)[,-1]
+
+fit3 <- regsubsets(Grad.rate~., college_data2, nvmax=12, method="forward")
+names(fit3)
+summary(fit3)
+for.summary <- summary(fit3)
+names(for.summary)
+for.summary$rsq
+# par(mfrow=c(2,2))
+#plot(for.summary$rss,xlab="Number of Variables", ylab="RSS",type="l")
+plot(for.summary$adjr2,xlab="Number of Variables", ylab="Adjusted RSq",type="l")
+which.max(for.summary$adjr2)
+points(which.max(for.summary$adjr2),for.summary$adjr2[which.max(for.summary$adjr2)], col="red",cex=2,pch=20) #12 variables
+plot(for.summary$cp,xlab="number of variables",ylab="Cp", type = 'l')
+which.min(for.summary$cp)
+points(which.min(for.summary$cp),for.summary$cp[which.min(for.summary$cp)],col="red",cex=2,pch=20) #12 variables
+plot(for.summary$bic,xlab="number of variables",ylab="BIC", type = 'l')
+points(which.min(for.summary$bic),for.summary$bic[which.min(for.summary$bic)],col="red",cex=2,pch=20) # 12 variables
+
+# choose to go with 12 variables
+coef.fit.fwd <- coef(fit3,12)
+var.min <- rownames(as.matrix(coef.fit.fwd)) # output the names
+print("============12 variable model using forwards stepwise selection==========")
+lm.input3 <- as.formula(paste("violentcrimes.perpop", "~", paste(var.min[-1], collapse = "+"))) # prepare for lm fomulae
+lm.input3
+coef.fit.fwd
+print("============BIC & Cp with 4 variables==========")
+for.summary$bic[12] #-398.7349
+for.summary$cp[12] #9.10198
+```
+
+There are 1042 entries with 13 variables, which implies that n > p by some margin. Alsom p is not _too_ large, meaning we could use all subsets, backwards stepwise, or forward stepwise selection to get the best combination of variables. 
+
+
+```{r}
 fit3 <- lm(Grad.rate ~ . - Name, data = college_data)
+summary(fit3)
+Anova(fit3)
 ```
 
 Based on fit3, answer the following questions:
@@ -353,35 +415,78 @@ car::Anova(fit3)
 **b)** If you want to kick one variable out from this model such that the resulting model would have the smallest possible RSS, which variable would you choose, and why?
 
 Kick out instate tuition - variable with smallest F-value / least importance.
+Kick out -- smallest F value or largest P value
  
 \vspace{.1in}
  
 Remove `State` from the data under consideration but include all other variables. Construct `fit4`: a parsimonious model, using regusubsets with exhaustive search.
 
 ```{r}
+fit.exh <- regsubsets(Grad.rate~. -Name - State, college_data, nvmax=12, method="exhaustive")
+exh.summary <- summary(fit3)
+#exh.summary
+# plot(exh.summary$adjr2,xlab="Number of Variables", ylab="Adjusted RSq",type="l")
+# which.max(exh.summary$adjr2)
+# points(which.max(exh.summary$adjr2),exh.summary$adjr2[which.max(exh.summary$adjr2)], col="red",cex=2,pch=20) #12 variables
+# plot(exh.summary$cp,xlab="number of variables",ylab="Cp", type = 'l')
+# which.min(exh.summary$cp)
+# points(which.min(exh.summary$cp),exh.summary$cp[which.min(exh.summary$cp)],col="red",cex=2,pch=20) #12 variables
+# plot(exh.summary$bic,xlab="number of variables",ylab="BIC", type = 'l')
+# points(which.min(exh.summary$bic),exh.summary$bic[which.min(exh.summary$bic)],col="red",cex=2,pch=20) # 12 variables
+```
+
+
+```{r}
 colleges_sub <- college_data %>% select(-Name, -State)
 x_col <- model.matrix(Grad.rate ~. , colleges_sub)[, -1]
 y_col <- college_data$Grad.rate
 reg_search <- regsubsets(x_col, y_col, method = "exhaustive")
+summary(reg_search)
+reg.summary <- summary(reg_search)
 ```
 
  
 **c)** Show the Cp plot and also show the BIC plot. Based on the two plots, which is the most desirable model size? Why?
 
 ```{r}
-par(mfrow = c(1, 2))
-plot(summary(reg_search)$bic, main = "BIC Plot")
-plot(summary(reg_search)$cp, main = "CP Plot")
+par(mfrow=c(2,2))
+# Cp PLOT
+names(reg.summary)
+plot(reg.summary$cp,xlab="number of variables",ylab="Cp", type = 'l')
+points(which.min(reg.summary$cp),reg.summary$cp[which.min(reg.summary$cp)],col="red",cex=2,pch=20) # 7 vars
 
-# find min via BIC:
-# which(summary(reg_search)$bic == min(summary(reg_search)$bic))
-# find min via CP:
-# which(summary(reg_search)$cp == min(summary(reg_search)$cp))
-
+# BIC PLOT
+plot(reg.summary$bic,xlab="number of variables",ylab="BIC", type = 'l')
+which.min(reg.summary$bic)
+points(6,reg.summary$bic[6],col="red",cex=2,pch=20) # 6 vars
+# OR
+# par(mfrow = c(1, 2))
+# plot(summary(reg_search)$bic, main = "BIC Plot")
+# plot(summary(reg_search)$cp, main = "CP Plot")
+# # find min via BIC:
+#  which(summary(reg_search)$bic == min(summary(reg_search)$bic))
+# # find min via CP:
+#  which(summary(reg_search)$cp == min(summary(reg_search)$cp))
 ```
 
 **d)** Regardless of your answer in c), report the 4-variable model chosen by regsubsets. To save time we will not pursue further.
 
+```{r}
+# model w/ 4 variables
+coef.exh <- coef(reg_search,4)
+var.min <- rownames(as.matrix(coef.exh)) # output the names
+var.min
+print("===========4 variable model using all subsets==========")
+lm.input2 <- as.formula(paste("Grad.rate", "~", paste(var.min[-1], collapse = "+"))) 
+lm.input2
+coef.exh
+print("============BIC & Cp with 4 variables==========")
+reg.summary$bic[4] # -703.7376
+reg.summary$cp[4] # 25.63655
+```
+
+"All.test.std"   "App.accept"     "Total.students" "In.Tuition" 
+Grad.rate ~ All.test.std + App.accept + Total.students + In.Tuition
 `All.test.std, App.accept, Total.students, In.tuition`
  
 # Question 5: Parsimonious Models (LASSO) 
@@ -392,9 +497,24 @@ Use LASSO for model selection, again making sure to do so without including the 
 
 ```{r}
 set.seed(12)
+names(college_data)
+# extract y, Grad.rate
+Y <- college_data$Grad.rate
+X <- model.matrix(Grad.rate~. -Name -State, data = college_data)[, -1]
+#colnames(X)
+fit.lasso.cv <- cv.glmnet(X, Y, alpha = 1, nfolds = 10)
+fit.lasso.cv$lambda.1se #1.222679
+plot(fit.lasso.cv) # plots the possible values for lambda
+#plot(fit.lasso.cv$lambda, fit.lasso.cv$cvm, xlab = expression(lambda), ylab="mean cv errors")
+
+#OR
+set.seed(12)
 fit_lasso <- cv.glmnet(x_col, y_col, family = "gaussian", alpha = 1)
 plot(fit_lasso, main = "CMV vs Lambda in LASSO")
+
+
 ```
+
 
 
 **b)** What is the `lambda.1se` value? Under the `lambda.1se` criterion, list the non-zero variables returned? 
@@ -402,18 +522,73 @@ plot(fit_lasso, main = "CMV vs Lambda in LASSO")
 lambda 1se:
 
 ```{r}
-fit_lasso$lambda.1se
+fit.lasso.cv$lambda.1se
+# fit_lasso$lambda.1se
 ```
 
 And we have the following variables in the model:
+Non-zero variables are:
 
 ```{r}
-coefs_1se = coef(fit_lasso, s="lambda.1se")
-rownames(coefs_1se)[which((coefs_1se) != 0)]
+# <<<<<<<< COEFFICIENTS FROM LASSO, WITH 10 FOLD CROSS VALIDATION USING LAMBDA.1SE >>>>>>>>
+# can choose any value between lambda.min and lambda.1se
+coef_1se <- coef(fit.lasso.cv, s = 'lambda.1se')
+nzcoef <- rownames(coef_1se)[which((coef_1se) != 0)]
+nzcoef
+# -1 below is taking out the (intercept)
+lm.input <- as.formula(paste("Grad.rate", "~", paste(nzcoef[-1], collapse = "+"))) 
+lm.input
+# OR
+# coefs_1se = coef(fit_lasso, s="lambda.1se")
+# rownames(coefs_1se)[which((coefs_1se) != 0)]
 ```
+Grad.rate ~ Schooltype2 + All.test.std + Acc.Rate + Pct.Yield + 
+    In.Tuition + Room.board
 
 
 **c)** `fit5`: Run OLS with all the variables returned from part b), **and with State also included in the model**. Are all the variables included here significant at the .01 level? If not, perform backward elimination (manually) until all the p-values for the remaining variables are less than .01. Show your model building process and report the final LS equations. *Note: for this problem, force State into the final model, i.e., do not remove State.*
+
+```{r}
+input5 <- Grad.rate ~ Schooltype + All.test.std + Acc.Rate + Pct.Yield + 
+    In.Tuition + Room.board + State
+fit5 <- lm(input5, data = college_data)
+summary(fit5)
+Anova(fit5)
+```
+
+kicking out `In.Tuition` because it has the smallest F-value (0.0027) and largest P value(0.9586)  
+```{r}
+input5.1 <- Grad.rate ~ Schooltype + All.test.std + Acc.Rate + Pct.Yield + 
+    Room.board + State
+fit5.1 <- lm(input5.1, data = college_data)
+# summary(fit5.1)
+Anova(fit5.1)
+```
+Now kicking out `Room.board`.
+```{r}
+input5.2 <- Grad.rate ~ Schooltype + All.test.std + Acc.Rate + Pct.Yield + 
+    State
+fit5.2 <- lm(input5.2, data = college_data)
+# summary(fit5.2)
+Anova(fit5.2)
+```
+Now kicking out `Pct.Yield`.
+```{r}
+input5.3 <- Grad.rate ~ Schooltype + All.test.std + Acc.Rate +  
+    State
+fit5.3 <- lm(input5.3, data = college_data)
+# summary(fit5.3)
+Anova(fit5.3)
+```
+Kicking out last var-- `Acc.Rate`.
+```{r}
+input5.4 <- Grad.rate ~ Schooltype + All.test.std +   
+    State
+fit5.4 <- lm(input5.4, data = college_data)
+# summary(fit5.4)
+Anova(fit5.4)
+```
+__Better way to do it__
 
 ```{r}
 fit5 = lm(Grad.rate ~ State + Schooltype + All.test.std + Acc.Rate + 
@@ -448,15 +623,13 @@ We see that our final model is `Grad.rate` ~ `State + Schooltype + All.test.std`
 Independent of Question 5. Assume that this we've decided to use `fit6` as our final model.
 
 `fit6`: `Grad.rate` ~ `State + Schooltype + All.test.std`
-
 ```{r}
-fit6 <- lm(Grad.rate ~ State + Schooltype + All.test.std,
-           data = college_data)
+fit6 <- lm(Grad.rate~State + Schooltype + All.test.std, data = college_data)
+Anova(fit6)
 ```
 
 
 **a)** Are all three variables significant at .01 level? 
-
 Yep
 
 ```{r}
@@ -464,12 +637,26 @@ car::Anova(fit6)
 ```
 
 **b)** Provide the residual plot.
+```{r}
+#<<<<<<<<<< RESIDUAL PLOT -- LINEARITY & HOMOSCEDASTICITY >>>>>>>>>
+plot(fit6$fitted.values, fit6$residuals,
+     pch = 16,
+     main = "residual plot")
+abline(h=0, lwd=4, col="red")
+```
 
 ```{r}
 plot(fit6$fitted, fit6$residuals)
 ```
 
 **c)** Provide the qqnorm plot of the residuals.
+
+```{r}
+#<<<<<<<< QQNORM PLOT FOR NORMALITY >>>>>>>>>
+qqnorm(fit6$residuals)
+qqline(fit6$residuals, lwd = 4, col="blue")
+```
+
 
 ```{r, warning=F}
 qqnorm(fit6$residuals)
@@ -482,10 +669,20 @@ qqline(fit6$residuals)
 Yeah
  
 **e)** Finally, using `fit6`, provide a 95% prediction interval for Penn's graduation rate. Based on Penn's actual graduation rate, how do you think of the performance of our prediction?
-
 ```{r}
-predict(fit6, newdata = filter(college_data, Name == "University of Pennsylvania"),
-        interval = "prediction", level = 0.95)
+# penn_loc <- which(college_data$Name == "University of Pennsylvania")  # identify Penn
+# Penn <- college_data[penn_loc, ]
+# Penn
+# `State + Schooltype + All.test.std`
+# pred <- data.frame(State = 'Pennsylvania',
+#                    Schooltype = '2',
+#                    All.test.std = .5765) # margin calculated from dem - republican vote
+# pred
+predict(fit6, Penn, interval = 'prediction', se = FALSE)
+
+# OR
+# predict(fit6, newdata = filter(college_data, Name == "University of Pennsylvania"),
+#         interval = "prediction", level = 0.95)
 ```
 
 The prediction interval is 74.81 to 123%, which I guess isn't great because our upper bound is over 100%, but is acceptable. Our fit is at 99%, and Penn's real graduation rate is `r college_data %>% filter(Name == "University of Pennsylvania") %>% select(Grad.rate)`, indicating that this school is underperforming our model, but at least taught us enough statistics to get a prediction interval containing the true rate.
@@ -496,15 +693,27 @@ Newsweek did a great job of collecting graduate data, but some schools are unhap
 
 **a)** Create a new categorical variable `Grad.rate.2` in `college_data` that fits the new specification. What proportion of the schools are categorized as "High Graduation", that is, `Grad.rate.2 == "1"`?
 
-34.06% of colleges have "high" graduation rates.
-
 ```{r}
+# limit <- 70
+# #Grad.rate2 <- factor(ifelse(college_data$Grad.rate >= limit, "1", "0"))
+# Grad.rate.2 <- ifelse(college_data$Grad.rate >= limit, "1", "0")
+# Grad.rate.2
+# summary(Grad.rate.2)
+
 college_data %<>%
     mutate(Grad.rate.2 = as.factor(as.numeric(Grad.rate >= 70)))
 table(college_data$Grad.rate.2) / nrow(college_data)
 ```
 
+34.06% of colleges have "high" graduation rates.
+
 **b)**  How well can we predict `Grad.rate.2`, with only three variables: `State`, `Schooltype` and `All.test.std`. Run a logistic regression of `Grad.rate.2` vs. `State`, `Schooltype` and  `All.test.std`. Is every variable significant at .01 level, whilst controlling the other two variables?
+```{r}
+# lm.categor <- lm(Grad.rate.2 ~ State + Schooltype + All.test.std, data = college_data)
+# summary(lm.categor)
+# Anova(lm.categor)
+# NOT WORKING
+```
 
 Each variable is significant at 0.01, while controlling for the other variables.
 
@@ -512,9 +721,45 @@ Each variable is significant at 0.01, while controlling for the other variables.
 fit7 <- glm(Grad.rate.2 ~ State + Schooltype + All.test.std, 
             data = college_data, family = "binomial")
 car::Anova(fit7)
+dim(college_data)
 ```
 
 **c)** Let us fix our classification threshold to 0.5, that is, we will classify the school to be "High Graduation" if $\hat{P}$`(Grad.rate.2 == "1") > 0.5` (the estimated probability of being "High Graduation" is greater than 0.5). Under this framework, what is the in-sample mis-classification error? Show your work.
+
+```{r}
+library(caret)
+# fit7          -- normal logistic regression
+# fit7.1        -- logistic regression with .5 threshold
+# fit7.output1  -- categorized df with 10 randomly chosen entries
+
+fit7.1 <- ifelse(fit7$fitted.values > 1/2, "1", "0")
+set.seed(10)
+fit7.output1 <- data.frame(college_data$Grad.rate.2, fit7.1, fit7$fitted.values)[sample(1042, 10),]
+names(fit7.output1) <- c("Y", "Predicted Y", "Prob")
+fit7.output1
+# confusion matrix
+cm.fit7.5 <- table(fit7.1, college_data$Grad.rate.2)
+cm.fit7.5
+# OR confusion matrix
+confusionMatrix(data = fit7.1,
+                 reference = college_data$Grad.rate.2,
+                 positive = levels(fit7.1)[2])
+
+```
+
+```{r}
+# MCE
+# fit7.1   0   1
+#      0 599 128
+#      1  88 227
+# cm.fit7.5[1,2] #128
+# cm.fit7.5[2,1] #88
+# length(fit7.1) #1042
+error.training <- (cm.fit7.5[1,2]+cm.fit7.5[2,1])/length(fit7.1)
+error.training
+```
+
+__OR__
 
 ```{r}
 con_mat <- table(fit7$fitted.values > 0.5, college_data$Grad.rate.2)

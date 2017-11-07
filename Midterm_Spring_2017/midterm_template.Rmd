@@ -1,4 +1,5 @@
 ---
+#============= SPRING 2017 =============
 title: "Midterm Response - Spring 2017"
 subtitle: "Modern Data Mining"
 author: "Your Name"
@@ -60,6 +61,7 @@ Answer goes here
 #<<<<< SUMMARY STATS >>>>>>>>
 dim(county_data)
 #sum.isna(county_data)
+# str(county_data)
 summary(county_data)
 tail(county_data, 10)
 head(county_data, 20)
@@ -67,6 +69,12 @@ View(county_data)
 #class(county_data)
 names(county_data)
 county_data[1,"adult_smoking"] # row 1 of column "adult_smoking"
+
+# <<<<LEVELS of a categorical variable>>>
+levels(county_data$state)
+# <<<<<<setting the BASE LEVEL >>>>>>
+# levels(county_data$median_income) # "HIGH", "LOW", "MEDIUM" (default is alphabetical order)
+# county_data$median_income <- factor(county_data$median_income, levels = c("LOW", "MEDIUM", "HIGH"))
 
 #<<<<< RENAME VARIABLES >>>>>>>>
 #county_data <- county_data %>% rename(smoking_adults = adult_smoking ) # new = old name
@@ -89,6 +97,8 @@ sapply(county_data, function(x) sum(is.na(x)))
 county_data %>% select(state) %>% distinct() # get distinct values for state column
 county_data %>% select(median_income) %>% distinct() # get distince values for median_income column
 #county_data %>% select(median_income) 
+#base R way
+#unique(county_data$state)
 
 # <<<<<<< MIN/MAX VALUES FOR A COLUMN >>>>>>>>>
 min(county_data$uninsured)
@@ -118,6 +128,8 @@ county_data$state[which.max(county_data$graduate_degree)]
 county_data$county[which.max(county_data$median_age)]
 county_data$county[which.min(county_data$median_age)]
 county_data$county[which.max(county_data$graduate_degree)]
+names(county_data)
+county_data[county_data$dem12_frac > .75, "state"]
 
 # boxplot -- poverty fraction by state
 # boxplot(county_data$state, county_data$poverty_frac) #nope
@@ -142,6 +154,12 @@ plot(county_data$unemployment, county_data$dem12_frac,
 abline(plot.fit, col="red", lwd=4)
 abline(h=mean(county_data$dem12_frac), lwd=5, col="blue")
 
+#<<<<< PAIRWISE SCATTER PLOT - correlation>>>>>>>
+county_data %>% 
+  select_if(is.numeric) %>%
+  select(african_american_frac, latino_frac, caucasian_frac, dem12_frac, rep12_frac) %>%
+  pairs()
+
 ```
 Using EDA, we were able to ascertain that there are 11 states included in this dataset. These states are: 
 California				
@@ -156,6 +174,7 @@ Kentucky
 Missouri
 
 ```{r}
+
 summary(county_data$poverty_frac)
 ```
 
@@ -171,6 +190,9 @@ summary(county_data$poverty_frac)
 __1a. Answer goes here__
 
 ```{r}
+# <<<< P VALUE >>>>>>
+# Intuition for P value --> there is an x% chance that the true beta is zero (null hypothesis) --> since it's so small we are able to reject the null hypothesis
+# ex: below -- there is a 0.00963 (.963% chance) that the true beta for median_incomeLow is zero
 names(county_data)
 summary(county_data)
 summary(county_data$median_income)
@@ -192,12 +214,12 @@ According to the linear model discribed above, counties with a low median income
 ```{r}
 lmfit1 <- lm(dem12_frac~median_income + state, data = county_data)
 summary(lmfit1)
-Anova(lmfit1)
+Anova(lmfit1) # if each var in model is signicant holding all other variables the same
+#anova(lmfit0, lmfit1)
 summary(lmfit1)$coefficients
-
-
 ```
 Yes, according to the F-test `median_income` is still significant in this new model at the 5% level, and we can reject $H_0$ that it isn't needed. 
+As long as Fstat is above 2.14 we reject the null at .05 level.
 
 #### 2B)
 
@@ -265,6 +287,7 @@ plot(fit.lasso.cv) # plots the possible values for lambda
 coef_1se <- coef(fit.lasso.cv, s = 'lambda.1se')
 nzcoef <- rownames(coef_1se)[which((coef_1se) != 0)]
 nzcoef
+# -1 IS GETTING RID OF ALL THE CATEGORICAL VALUES
 lm.input <- as.formula(paste("dem12_frac", "~", paste(nzcoef[-1], collapse = "+"))) 
 # print <-  as.formula(paste(nzcoef[-1], collapse = "/n")) 
 lm.input
@@ -320,7 +343,22 @@ fit.ols.cv <- (lm(dem12_frac ~ reg_vote_frac + turnout +
     latino_frac + bachelors_degree + graduate_degree, county_data))
 summary(fit.ols.cv)
 Anova(fit.ols.cv)
+
+# CORRELATION BETWEEN VARIABLES still in the model
+cor(county_data$latino_frac, county_data$caucasian_frac)
 ```
+
+```{r}
+# USING REGSUBSETS
+
+Xy <- model.matrix(dem12_frac ~ median_income + total_votes_12 + registered_voters + reg_vote_frac + turnout + hs_diploma_degree + poverty_frac + caucasian_frac + gini_coefficient + median_age + adult_smoking + uninsured + unemployment + violent_crime + infant_mortality + latino_frac + graduate_degree + margin_state_08, county_data)[,-1]
+
+Xy <- data.frame(Xy, county_data$dem12_frac)
+b<-regsubsets(county_data.dem12_frac~.,Xy)
+plot(summary(b)$cp)
+```
+
+
 
 #### 3e)  
 
@@ -354,9 +392,9 @@ qqline(fit.ols.cv$residuals, lwd = 4, col="blue")
 ```
 
 The deviations from the straight line are minimal. This indicates normal distribution.
-
 The points clearly follow another shape than the straight line.
 The histogram confirms the non-normality. The distribution is not bell-shaped but positively skewed (i.e., most data points are in the lower half). Histograms of normal distributions show the highest frequency in the center of the distribution.
+
 
 #### 3D)
 
@@ -391,13 +429,28 @@ pred <- data.frame(state = 'Washington',
                    margin_state_08 = .5765 - .4048) # margin calculated from dem - republican vote
 pred
 ```
+
 ```{r}
 predict(lm.turnout, pred, interval = 'prediction', se = FALSE)
+# turnout expected to be .45 - .85
+# if you have a model with State in it then you won't be able to predict due to the fact that that WA isn't in original dataset
 ```
+Example of creating a dummy entry for prediction:
+```{r}
+names(county_data)
+test.county <- county_data[1,]
+test.county
+test.county$state <- "Idaho"
+test.county$county <- "Butte"
+# etc. for all vars
+test.county
+```
+
+
 
 ## ISLR: confidence interval vs. prediction interval
 
-We use a _confidence interval_ to quantify the __uncertainty surrounding the average sales over a large number of cities__. For example, given that $100,000 is spent on TV advertising and $20,000 is spent on radio advertising in each city, the 95 % confidence interval is [10,985, 11,528]. We interpret this to mean that _95 % of intervals of this form will contain the true value of f(X).8_ On the other hand, a _prediction interval_ can be used to quantify the __uncertainty surrounding sales for a particular city__. Given that $100,000 is spent on TV advertising and $20,000 is spent on radio advertising in that city the 95 % prediction interval is [7,930, 14,580]. We interpret this to mean that _95 % of intervals of this form will contain the true value of Y for this city_. Note that both intervals are centered at 11,256, but that the prediction interval is substantially wider than the confidence interval, reflecting the increased uncertainty about sales for a given city in comparison to the average sales over many locations.
+We use a _confidence interval_ to quantify the __uncertainty surrounding the average sales over a large number of cities (on the beta coefficient)__. For example, given that $100,000 is spent on TV advertising and $20,000 is spent on radio advertising in each city, the 95 % confidence interval is [10,985, 11,528]. We interpret this to mean that _95 % of intervals of this form will contain the true value of f(X).8_ On the other hand, a _prediction interval_ can be used to quantify the __uncertainty surrounding sales for a particular city__. Given that $100,000 is spent on TV advertising and $20,000 is spent on radio advertising in that city the 95 % prediction interval is [7,930, 14,580]. We interpret this to mean that _95 % of intervals of this form will contain the true value of Y for this city_. Note that both intervals are centered at 11,256, but that the prediction interval is substantially wider than the confidence interval, reflecting the increased uncertainty about sales for a given city in comparison to the average sales over many locations.
 
 
 ## Declaration
