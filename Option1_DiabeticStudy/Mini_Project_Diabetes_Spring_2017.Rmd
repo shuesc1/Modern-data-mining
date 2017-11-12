@@ -28,14 +28,14 @@ library(ggplot2)
 library(GGally)
 library(plotrix)
 ```
-
+<!---
 # Instructions
 
 * This project is due at **11:59pm on Sunday, April. 2, 2017.**
 * It is an individual project, amounting to 15% of your final grade. See the *Collaboration* section at the bottom of this document.
 * There is no single correct answer. You will be graded on the general quality of your work. 
 * The entire write up should not be more than 10 pages. You may put any supporting documents, code, graphics, or other exhibits into an Appendix, which is not counted in the 10 page limit.
-
+--->
 # Introduction
 
 ## Background
@@ -139,8 +139,8 @@ To save your time we are going to use some data sets cleaned by the group. Thus,
 df.full <- read.csv("diabetic.data.csv", header=TRUE, sep=",", na.strings="") # accounts for header, CSV, and na strings
 dim(df.full) # 101,766 observations x 50 variables
 head(df.full, 30)
-View(df.full)
-summary(df.full)
+# View(df.full)
+# summary(df.full)
 summary(df.full$readmitted)
 ```
 
@@ -149,7 +149,7 @@ summary(df.full$readmitted)
 data1 <- read.csv("diabetic.data.csv", header=TRUE, sep=",", na.strings="") # accounts for header, CSV, and na strings
 dim(data1) #101766 observations x 50 variables
 tail(data1, 20)
-head(data1, 20)
+# head(data1, 20)
 # View(data1)
 
 data1 <- data1[ -c(6, 11:12, 28, 30, 33, 36:41, 43:47) ]# getting rid of unhelpful vars
@@ -269,93 +269,117 @@ pie(slices.oth,labels = lbls.oth, col=rainbow(length(lbls.hisp)),
 
 ```{r}
 summary(data1$gender) #boxplot
+         # Female            Male Unknown/Invalid 
+         #  54708           47055               3 
 readmit_less30.gender <- filter(data1, readmitted == "<30")
+dim(readmit_less30.gender) # 11357 total observations
+dim(filter(readmit_less30.gender, gender == "Female")) #6152 female ~54% of <30 dataset, 11.2% of females of total dataset
+dim(filter(readmit_less30.gender, gender == "Male")) #5205 male, 45% of <30 dataset, 11.1% of males of total dataset
 readmit_more30.gender <- filter(data1, readmitted == ">30")
 
+nrow(readmit_more30.gender) #35545 total observations
+nrow(filter(readmit_more30.gender, gender == "Female")) #19518 female ~54% of >30 dataset, 35.7% of females of total dataset
+nrow(filter(readmit_more30.gender, gender == "Male")) #16027 male, 45%, 34.1% of males of total dataset
+perc.female <- (19518/35545)
+perc.female #0.5491068
+perc.male <- (16027/35545)
+perc.male # 0.4508932
+
 par(mfrow = c(2, 2))
+# nrow(which(readmit_less30.gender == "Female"))
+# nrow(filter(readmit_less30.gender, gender == "Female"))
+# nrow(readmit_less30.gender)
+# 
+# x.perc.gender <- c(nrow(filter(readmit_less30.gender, gender == "Female"))/nrow(readmit_less30.gender), nrow(filter(readmit_less30.gender, gender == "Male"))/nrow(readmit_less30.gender))
+# x.perc.gender
 ggplot(readmit_less30.gender) + geom_bar(aes(x = gender), fill = "blue") +
-  labs(title = "Histogram of readmits in less than 30 days by gender", x = "Gender", y = "Frequency")
+  labs(title = "Histogram of readmits in less than 30 days (<30) by gender", x = "Gender", y = "Frequency")
 ggplot(readmit_more30.gender) + geom_bar(aes(x = gender), fill = "blue") +
-  labs(title = "Histogram of readmits in more than 30 days by gender", x = "Gender", y = "Frequency")
+  labs(title = "Histogram of readmits in more than 30 days (>30) by gender", x = "Gender", y = "Frequency")
 ```
+
+In the cleaned dataset we have 54708 female observations and 47055 male observations, which means roughly 54% of the patients under consideration were female (for all readmission categories), while ~46% were male. When comparing hospital readmits striated by gender, of the patients that were readmitted in _under_ 30 days approximately 54% (6152/11357) were female, matching the overall female representation. Similarly, of patients that were readmitted _over_ 30 days again 54% (19518/35545) were female. It's worth noting that the total number of patients (male & female) readmitted over 30 days is about 3 times that of those readmitted in _less_ than 30 days. 
+
+There seems to be a gap between genders here implying that women are more prone to readmission, but this is quickly rebuked when we compare the genders in terms of their total observations. For patients who were readmitted in _less_ than 30 days, female patients represent 11.2% (6152/54708) of the total female population, while those who are male represent a similar 11.1% (5205/47055) of the overall male population. The same is true for patients readmitted _over_ 30 days: female patients account for 35.7% (19518/54708) of the total female population, while male patients comprise 34.1% (16027/47055) of the total male population. 
+
+This lends credence to the notion that gender does not contribute to likelihood of readmission. 
 
 ##### Age
 
 ```{r}
 summary(data1$age) #scatterplot
+#<<< SCATTERPLOT WITH LS LINE ADDED >>>>>
+lm.age <- lm(readmitted~age, data = data1)
+plot(data1$age, data1$readmitted,
+     pch = 16,
+     xlab = "Patient age",
+     ylab = "Readmission category",
+     main = "Patient age vs. readmission category")
+abline(lm.age, col="red", lwd=4)
+# abline(h=mean(county_data$dem12_frac), lwd=5, col="blue")
 ```
+
+It appears that the categories with the largest number of readmits is 70-80 and 80-90, which are almost identical. An interesting trend that we see is that the 20-30 age group has the overall highest readmit frequency under 30 days, which is surprising. 
 
 ##### Change (in diabetes medication)
 
 ```{r}
 summary(data1$change) #boxplot - change in diabetes medication
+#    Ch    No 
+# 47011 54755
+
+# <30 readmit patients
+readmit_less30.change <- filter(data1, readmitted == "<30")
+dim(readmit_less30.change) # 11357 total observations
+dim(filter(readmit_less30.change, change == "Ch")) #5558 patients with a change of med readmitted <30 days, 48.9% of all patients readmitted <30, 11.8% of all patients with a change in meds
+dim(filter(readmit_less30.change, change == "No")) #5799 patients with NO change in meds readmitted <30 days, 51.1% of all patients readmitted <30, 10.6% of all patients with NO change in meds
+
+#>30 readmit patients
+readmit_more30.change<- filter(data1, readmitted == ">30")
+dim(readmit_more30.change) #35545 observations
+dim(filter(readmit_more30.change, change == "Ch")) #17272
+perc.readmit_more30.ch <- 17272/35545
+perc.readmit_more30.ch #0.4859193
+perc.all.ch <- 17272/47011
+perc.all.ch #0.3674034
+dim(filter(readmit_more30.change, change == "No"))#18273
+perc.readmit_more30.no <- 18273/35545
+perc.readmit_more30.no #0.5140807
+perc.all.no <- 18273/54755
+perc.all.no #0.3337229
+
+
+# pie charts 
+par(mfrow = c(2, 1))
+slices.change <- c(5558, 5799) 
+lbls.change <- c("change in medication", "no change in medication")
+pct.change <- round(slices.change/sum(slices.change)*100)
+lbls.change <- paste(lbls.change, "-(",pct.change, ")") # add percents to labels 
+lbls.change <- paste(lbls.change,"%",sep="") # ad % to labels 
+pie(slices.change,labels = lbls.change, col=rainbow(length(lbls.change)),
+  	main="Pie Chart of change in diabetes medication status for patients readmitted <30 days")
+slices.nochange <- c(17272, 18273) 
+lbls.nochange <- c("change in medication", "no change in medication")
+pct.nochange <- round(slices.nochange/sum(slices.nochange)*100)
+lbls.nochange <- paste(lbls.nochange, "-(",pct.nochange, ")") # add percents to labels 
+lbls.nochange <- paste(lbls.nochange,"%",sep="") # ad % to labels 
+pie(slices.nochange,labels = lbls.nochange, col=rainbow(length(lbls.nochange)),
+  	main="Pie Chart of change in diabetes medication status for patients readmitted >30 days")
+
+
 ```
 
 ##### Number of diagnosis
 
 ```{r}
 summary(data1$number_diagnoses) #bar plot
+readmit_less30.diag <- filter(data1, readmitted == "<30")
+hist(readmit_less30.diag$number_diagnoses)
+readmit_more30.diag <- filter(data1, readmitted == ">30")
+hist(readmit_more30.diag$number_diagnoses)
 ```
 
-
-
-
-
-
-```{r}
-# #<<<<< SUMMARY STATS >>>>>>>>
-# dim(county_data)
-# #sum.isna(county_data)
-# # str(county_data)
-# summary(county_data)
-# tail(county_data, 10)
-# head(county_data, 20)
-# View(county_data)
-# #class(county_data)
-# names(county_data)
-# county_data[1,"adult_smoking"] # row 1 of column "adult_smoking"
-# 
-# # <<<<LEVELS of a categorical variable>>>
-# levels(county_data$state)
-# # <<<<<<setting the BASE LEVEL >>>>>>
-# # levels(county_data$median_income) # "HIGH", "LOW", "MEDIUM" (default is alphabetical order)
-# # county_data$median_income <- factor(county_data$median_income, levels = c("LOW", "MEDIUM", "HIGH"))
-# 
-# #<<<<< RENAME VARIABLES >>>>>>>>
-# #county_data <- county_data %>% rename(smoking_adults = adult_smoking ) # new = old name
-# names(county_data)
-# 
-# # <<<<<<<<<< NA VALUES >>>>>>>>>
-# sum(is.na(county_data))
-# # show how many NA values in each column
-# sapply(county_data, function(x) sum(is.na(x)))
-# 
-# # <<<<<< REMOVE A COLUMN >>>>>>>>
-# #remove a column
-# # county_data.mod <- county_data[,-1]
-# #head(county_data.mod)
-# #summary(county_data.mod)
-# #View(county_data.mod)
-# 
-# # <<<<<<<<<<<< GETTING DISTINCT VALUES IN A COLUMN >>>>>>>>>>>>
-# #county_data %>% county_data(,-1)
-# county_data %>% select(state) %>% distinct() # get distinct values for state column
-# county_data %>% select(median_income) %>% distinct() # get distince values for median_income column
-# #county_data %>% select(median_income) 
-# #base R way
-# #unique(county_data$state)
-# 
-# # <<<<<<< MIN/MAX VALUES FOR A COLUMN >>>>>>>>>
-# min(county_data$uninsured)
-# max(county_data$uninsured)
-# min(county_data$poverty_frac)
-# max(county_data$poverty_frac)
-
-```
-
-```{r}
-
-```
+There consistently seems to be a large spike in frequency around 9 diagnoses. 
 
 
 # Research approach
