@@ -563,6 +563,9 @@ input5.1 <- Grad.rate ~ Schooltype + All.test.std + Acc.Rate + Pct.Yield +
 fit5.1 <- lm(input5.1, data = college_data)
 # summary(fit5.1)
 Anova(fit5.1)
+
+# BETTER way to eliminate/kick out/ drop variables one-by-one
+# fit2.3 <- update(fit2.2, .~. -CIG)
 ```
 Now kicking out `Room.board`.
 ```{r}
@@ -577,6 +580,7 @@ Now kicking out `Pct.Yield`.
 input5.3 <- Grad.rate ~ Schooltype + All.test.std + Acc.Rate +  
     State
 fit5.3 <- lm(input5.3, data = college_data)
+confint(fit5.3)
 # summary(fit5.3)
 Anova(fit5.3)
 ```

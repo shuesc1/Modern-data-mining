@@ -566,6 +566,7 @@ Which model(s) gives us the smallest AIC?
 Get the design matrix without 1's and HD.
 ```{r}
 Xy <- model.matrix(HD ~.+0, fram_data.f) 
+# Xy
 ```
 
 Attach y as the last column.

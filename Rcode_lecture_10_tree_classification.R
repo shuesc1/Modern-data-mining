@@ -1,0 +1,313 @@
+#################################
+#### Tree based methods
+### Part II: RandomForest for classifications
+# 1) Single Trees
+# 2) Random Forests
+
+# Notice, RF for classification is similar to that of regression RF's. 
+# May skip this and please go through the code for 1) and 2)
+
+
+# 3) Appendix 1: Deviance and Gini index in details
+# 4) Appendix 2. Random classifiers
+
+
+# Load all packages
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(randomForest, tree, rpart, pROC, partykit) 
+
+
+##################################################
+### Part II: RandomForeset for classifications ###
+
+### Random Forest for classification is similar to that
+# of regression trees except for the criterion used for growing a tree is different.
+
+# Algorithm: 
+
+# -For b=1 to B
+#   I) Take a bootstrap sample of size n
+#   II) Build a tree T_b, using the bootstrap sample recursively until the n_min is met
+#         i) Randomly select m variables
+#         ii) For each variable, find the best split point such that
+#                    the misclassification errors is minimized by majority vote
+#         iii) Find the best variable and split point, split the node into two
+#         iv) The end node will output the majority vote either 0 or 1
+# -Output the trees {T_1, T_2, ... T_B}
+# -The final aggregated tree will report the prop. of 1's among B trees
+
+
+
+### Remarks on the splitting criterion. 
+# Suppose  (n_1, p_1) and (n_2, p_2) are the number of obs'n and sample prop of "1"'s
+# on the left and right split point
+
+#### Three criteria are commonly used
+#      i) Mis classification errors for majority vote (RF uses)
+#              (n_1* min(p_1, 1-p_1) +  n_2* min(p_2, 1-p_2))/n
+#         
+#        (MisClassification errors are min(p_1, 1-p_1) in the left region
+#                  and min(p_2, 1-p_2) on the right side)
+#
+#      ii) Deviance: -2loglik=
+#                            =-2*(n1*p1*log(p1)+ n1*(1-p1)*log(1-p1) +
+#                              n2*p2*log(p2)+ n2*(1-p2)*log(1-p2))
+# 
+#      iii) Gini index 2(p_1 (1-p_1) + p_2( 1-p_2))   we skip this         
+#           Gini index: misclassification errors for a random procedure that
+#           assign hat y="1" with prob. p_1
+
+### Framingham data for classification trees for simplicity
+
+rm(list=ls()) # Remove all the existing variables
+data <- read.table("Framingham.dat", sep=",", header=T, as.is=T)
+data1 <- na.omit(data)    # no missing value
+names(data1)[1] <- "HD"
+data1$HD <- as.factor(data1$HD)
+data1$SEX <- as.factor(data1$SEX)
+table(as.factor(data1$CIG))  # The levels are very unbalanced. We combine those CIG >35 together and
+# make CIG a categorical variable
+data1$CIG[data1$CIG > 35] <- 40 
+data1$CIG <- as.factor(data1$CIG)
+str(data1)
+
+
+### 1):  A single tree using package tree
+
+# Note this package is different from RandomForest
+
+# a) Use SBP alone to see the effect of two different criteria: deviance and gini 
+
+fit.dev <- tree(HD~SBP, data1, 
+                control=tree.control(nrow(data1), mindev = 0.01),
+                split="deviance")  
+#split = c("deviance", "gini"), "deviance" as default. 
+plot(fit.dev)
+text(fit.dev, pretty=TRUE)  # plot the labels
+fit.dev$frame 
+
+# var    n       dev yval splits.cutleft splits.cutright   yprob.0   yprob.1
+# 1    SBP 1393 1469.3313    0         <154.5          >154.5 0.7796123 0.2203877
+# 2 <leaf>  923  829.0482    0                                0.8342362 0.1657638
+# 3 <leaf>  470  594.5583    0                                0.6723404 0.3276596
+
+
+# b) Use all predictors
+fit.tree <- tree(HD~., data1)
+plot(fit.tree)
+text(fit.tree, pretty=TRUE)  # plot the labels
+fit.tree$frame  
+# yprob.1=sample prop of 1's in the end node
+# yval is majority vote class
+# we can set our own rules by thresholding yprob
+
+# Use ROC/AUC ect. to measure the performance
+predict(fit.tree, data1)[1:20, ]
+prob.1 <- predict(fit.tree, data1)[, 2] # Prob(y=1|x)
+roc(data1$HD, prob.1, plot=T) # since there are only three values for hat P(y=1)
+
+
+# c) A single tree with categorical predictors
+
+#To convince you that trees take categorical var. Grow
+# a tree with only CIG+SBP (Obviously from b), CIG didn't get in)
+
+fit.tree <- tree(HD~CIG+SBP, data1, control=tree.control(nrow(data1), mindev = 0.005))
+plot(fit.tree)
+text(fit.tree, pretty=TRUE)
+fit.tree$frame 
+(unique(as.factor(round(predict(fit.tree)[, 2], 5)))) # To check it agrees with fit.tree$frame
+
+
+# d) Package rpart
+# Use package rpart, together with rattle or partykid we can get a better
+# tree displays.
+fit.tree <- rpart(HD~., data1, minsplit=1, cp=9e-3)
+fit.tree <- rpart(HD~CIG+SBP, data1, minsplit=1, cp=9e-3)
+    # cp is similar to mindev in tree()
+    # control=rpart.control(cp=-1, minbucket=1), method="class")
+plot(as.party(fit.tree), main="Final Tree with Rpart") # method 1
+fancyRpartPlot(fit.tree)   # The plot shows the split together with more information # method 2
+fit.tree$frame
+
+### 2):  Random Forests
+
+# 1)  First run only a few trees 
+
+set.seed(1)
+fit.rf <- randomForest(HD~., data1, mtry=4, ntree=4)   
+
+# Mis-classification rates of OOB, misclassification errors for "0" and "1"
+plot(fit.rf)
+
+# The output
+names(fit.rf)
+fit.rf$mtry
+fit.rf$votes[1:20, ]   #  prob of 0 and 1 using oob's 
+fit.rf$predicted[1:20] #  lables using oob's and majority vote. Notice those with NA because they are not in any OOB's
+fit.rf$err.rate #      #  mis-classification errors of oob's/0/1
+predict(fit.rf, data1)[1:20]  # prediction by using the RF based on all the training data.
+
+data.frame(fit.rf$votes[1:20, ], fit.rf$predicted[1:20], predict(fit.rf, data1)[1:20] )
+
+# 2) RandomForest, more general
+
+fit.rf <- randomForest(HD~., data1, mtry=4, ntree=500 )
+#fit.rf=randomForest(HD~., data.fram, cutoff=c(.5, .5), ntree=500) 
+### default settings: 
+### mtry=p/3, (sqrt(p) in classification tree)
+### Bootstrap size B=ntree=500 
+
+
+plot(fit.rf)        # Three curves of MCE of 1's, 0's and  overall. 
+
+fit.rf.pred <- predict(fit.rf, type="prob")  # output the prob of "0" and "1")
+fit.rf.pred.y <- predict(fit.rf, type="response")
+mean(data1$HD != fit.rf.pred.y)  # Training misclassification error is about .23
+
+# 3)  using training and testing data
+n <- nrow(data1)
+n1 <- (2/3)*n
+train.index <- sample(n, n1,replace=FALSE)
+length(train.index)
+data.train <- data1[train.index, ]
+data.test <- data1[-train.index, ]
+
+
+
+fit.rf.train <- randomForest(HD~., data.train) 
+plot(fit.rf.train)
+predict.rf.y <- predict(fit.rf.train, newdata=data.test)   # labels
+predict.rf <- predict(fit.rf.train, newdata=data.test, type="prob")  #probabilities
+
+# Testing errors
+mean(data.test$HD != predict.rf.y)   # about .24
+
+# Testing ROC curve
+roc(data.test$HD, predict.rf[,2], plot=TRUE)  # Ok
+
+
+# ) Comments about RF classifications
+
+# Pro: pretty accurate; fast; robust to number of variables;
+#      not very sensitive to outliers.
+#      It handels automatically multi-categories in response. 
+
+# Con: loose interpretation, may discriminate against categorical predictors.
+#      Extremely cautious about
+#      . Importance plot
+#      . The validity of using a cut off point other than 1/2, though we can still set our 
+#        own thresholds. 
+#         
+
+#### We will see how other competitors work
+
+
+
+
+
+#### Appendix 1: Deviance and Gini index in details
+
+#Use SBP alone to see the effect of two different criteria: deviance and gini 
+
+fit.dev <- tree(HD~SBP, data1, split="deviance")  
+#split <-  c("deviance", "gini"), "deviance" as default. 
+plot(fit.dev)
+text(fit.dev, pretty=TRUE)  # plot the labels
+fit.dev$frame 
+
+# var    n       dev yval splits.cutleft splits.cutright   yprob.0   yprob.1
+# 1    SBP 1393 1469.3313    0         <154.5          >154.5 0.7796123 0.2203877
+# 2 <leaf>  923  829.0482    0                                0.8342362 0.1657638
+# 3 <leaf>  470  594.5583    0                                0.6723404 0.3276596
+
+
+summary(fit.dev)
+#Residual mean deviance:  1.023 = 1424 / 1391 
+
+# Use above output, we recover the mean dev above: -2loglik/(n-number of nodes)
+
+# 
+p1 <- 0.1657638        # sample prop of Y=1 when SBP <154.5
+n1 <- 923
+n1* p1              # number of Y=1 when SBP < 154.5
+n1*(1-p1)           # number of Y=0 when SBP < 154.5
+p2 <- 0.3276596        # sample prop of Y=1 when SBP <154.5
+n2 <- 470
+n2*p2               # number of Y=1 when SBP > 154.5
+n2*(1-p2)           # number of Y=0 when SBP > 154.5
+
+dev <- -2*(n1*p1*log(p1)+ n1*(1-p1)*log(1-p1) +
+          n2*p2*log(p2)+ n2*(1-p2)*log(1-p2))
+dev/(1393-2)
+# [1] 1.023441   agrees with the summary output
+
+
+
+fit.gini <- tree(HD~SBP, data1, split="gini")  #split = c("deviance", "gini") as an option
+plot(fit.gini)
+text(fit.gini, pretty=TRUE)  # plot the labels
+fit.gini$frame 
+summary(fit.gini)
+
+# We notice that two trees are different.
+
+
+#### Appendix 2. Random classiferes
+
+## Assign Y = 1 with prob of P(Y=1),  Simillarly
+## Assing Y= 0 with prob of P(Y=0)
+## The misclassificaiton error will be same as gini index.
+
+## We use the following tree to demonstrate how to produce a random procedure and
+## also to compare the mis-classification errors between the majority vote and the random procedure.
+
+### We use fit.gini to construct two sets of classifiers.
+fit.gini <- tree(HD~SBP, data1, split="gini")  #split = c("deviance", "gini") as an option
+phat <- predict(fit.gini, data1 ) # estimated prob
+
+
+#1) Majority vote rules:
+
+y.5 <- ifelse(phat>0.5, "1", "0")   
+mean(data1$HD != y.5)       ## It's about .5         
+  
+#2) Use a random procedure yhat="1" with prob phat
+
+n <- nrow(data1)
+y.rand <- rep(0,n )
+for (i in 1:n) {
+  y.rand[i] <- rbinom(1, 1, phat[i, 2])
+}
+
+mean(data1$HD != y.rand)   # mis-classification errors
+#[1] 0.3201723   # it's about .3
+
+
+#### Appendix 3. Tree split in action (a toy example)
+library(MASS)
+data(cats)
+help(cats)
+plot(cats[2:3], pch = 21, bg = c("red", "green3")[unclass(cats$Sex)])
+
+cats_model <- tree(Sex~., data = cats, control=tree.control(nrow(cats), mindev = 0.05))
+plot(cats_model)
+text(cats_model)
+
+x1 <- seq(min(cats$Bwt), max(cats$Bwt), length = 50)
+x2 <- seq(min(cats$Hwt), max(cats$Hwt), length = 50)
+Feature_x1_to_x2 <- expand.grid(Bwt = x1, Hwt = x2)
+Feature_x1_to_x2_Class <- apply(predict(cats_model,Feature_x1_to_x2),1,
+                                function(one_row) return(which(one_row == max(one_row))))
+plot(cats[2:3], pch = 21, bg = c("red", "green3")[unclass(cats$Sex)])
+contour(x1,x2,matrix(Feature_x1_to_x2_Class,length(x1)),add = T, levels = 1.5, labex = 0)
+
+# change mindev
+cats_model <- tree(Sex~., data = cats, control=tree.control(nrow(cats), mindev = 0.001))
+plot(cats_model)
+text(cats_model)
+Feature_x1_to_x2 <- expand.grid(Bwt = x1, Hwt = x2)
+Feature_x1_to_x2_Class <- apply(predict(cats_model,Feature_x1_to_x2),1,
+                                function(one_row) return(which(one_row == max(one_row))))
+plot(cats[2:3], pch = 21, bg = c("red", "green3")[unclass(cats$Sex)])
+contour(x1,x2,matrix(Feature_x1_to_x2_Class,length(x1)),add = T, levels = 1.5, labex = 0)

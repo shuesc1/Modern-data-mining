@@ -1,0 +1,406 @@
+---
+title: "Midterm"
+author: "STAT 471/571/701 Modern Data Mining - Joseph Haymaker"
+date: "11/07/2017"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(leaps)
+library(car)
+library(glmnet)
+library(tidyverse)
+library(ggplot2)
+library(magrittr)
+library(GGally)
+```
+
+<!---
+**Name your submission using the scheme: `LastName_FirstName_Midterm`. For example: Zhao_Linda_Midterm.rmd or Zhao_Linda_Midterm.pdf or Zhao_Linda_Midterm.html or Zhao_Linda_Midterm.docx**
+
+*Instruction*: This exam requires you to use R. It is completely open book/notes. Write your answers using .rmd format and knitr it into html/pdf/docx. Always attach plots or R-output when needed. If you have trouble formatting the plots, don’t worry about it. We are not looking for pretty solutions, rather to see if you are able to make sense out of data using R. You may write your solution in a word file (no penalty for doing so). Attach your r code at the end of your file as an appendix then. 
+--->
+\vspace{.2in}
+<!---
+* Data needed:
+/canvas/Files/Special_Midterm_Folder/LifeExpectancy_exam.csv
+
+* Midterm needed (only take one you need): 
+
+    +  /canvas/Files/Special_Midterm_Folder/midterm_fl17.Rmd
+    
+    + /canvas/Files/Special_Midterm_Folder/midterm_fl17.pdf
+    
+    + /canvas/Files/Special_Midterm_Folder/midterm_fl17.docx
+
+* Help:
+As always skip any part you have trouble with and you may come back to finish it if you have time. Ask one of us for help if you are stuck somewhere.
+
+* Electronic submission:
+In the ‘Assignments’ section, go to the ‘Midterm’ assignment and upload your completed files. It takes multiple files. The folder will be closed at 8:10 pm.
+
+* If you have trouble to upload your files, email them to lzhao@wharton.upenn.edu.
+--->
+\vspace{.1in}
+**Life Expectancy Worldwide**
+
+Life expectancy (denoted as LE) is a measure of how long a person may live.  There is significant variation among different countries world wide. The average was 70.5 (68.5 years for males and 73.5 years for females) over the period 2010–2013. Factors related to life expectancy are complex. In this study we focus on factors such as health care, environment, social economic predictors among other controlling factors.
+
+The goal is to identify important factors associated with Life Expectancy and to be able to quantify the relationship. We will also try to predict life expectancy for some countries. 
+
+Data: A set of statistics from 2000 – 2013 are available. We are using a piece of it after eliminating some missing values. Original Source: World Bank Group's Open Data http://data.worldbank.org/
+
+We use the following code to read the data. 
+
++ **data.all: all the observations**
+
++ **data2013: information for 2013 only**
+
+```{r read data, include=FALSE}
+# put data in the same folder where this .rmd file is.
+data.all <- read.csv("LifeExpectancy_exam.csv", header = T)
+names(data.all)
+dim(data.all) # 1779 observations by  21 variables
+# data2013 is a subset only about 2013
+data2013 <- data.all[data.all$Year==2013, ] # extracting only 2013 data
+data2013 <- data2013[, -4] # take "Year" out
+names(data2013)
+```
+
+|Variable|Description|
+|----------------------|--------------------------------|
+|Country|Country name|
+|LE|Life expectancy|
+|Year|Year|
+|GDP|GDP per capita|
+|Population|Population density|
+|Urban.pop|Percentage of urban population|
+|Household.consump| Household consumption expenditure in million|
+|Unemployment| Unemployment rate|
+|Forest.area| Percentage of forest|
+|Water| Access to improved water source in percentage|
+|Food.prod.index| Food production index|
+|Arable.land| Arable land per capita|
+|Health.expend| Health expenditure percentage of GDP|
+|Immunization| DPT Immunization percentage of children|
+|Sanitation.faci| Access to improved sanitation facilities in percentage| 
+|Immunization.measles| Measles Immunization percentage of children|
+|Health.exp.pocket| Percentage of out of pocket health expenditure to total health| 
+|Fixed.tel| Fixed telephone subscriptions per 100 people|
+|Mobile.cel| Mobile cellular subscriptions per 100 people|
+|Internet.users| Internet users per 100 people|
+|Continent| Continent|
+
+\pagebreak 
+
+## Question 1 - EDA of data2013
+### a) Quick summary
+
+Report the following information:
+
+**i)** __Number of variables__
+
+```{r}
+dim(data2013)
+```
+From the dimensions of the paired down 2013 data we see that there are 78 observations (down from 1779 from the whole original dataset), and 20 variables (down from 21 from the original, taking out `Year` as we saw above).
+
+**ii)** Number of countries
+
+```{r, echo=FALSE}
+#names(data2013)
+#data2013 %>% select(Country) %>% distinct() # get distinct values for state column
+# head(data2013)(
+#View(data2013)
+#base R way
+unique(data2013$Country)
+```
+Using both techniques (dplyr and base R) we can see that there are __73 distinct countries__ represented --  1 for each row in the 2013 data. 
+
+**iii)** __Is there any missing value?__
+
+```{r, echo=FALSE}
+sum(is.na(data2013))
+# show how many NA values in each column
+sapply(data2013, function(x) sum(is.na(x)))
+```
+As we can see there are no 'NA' values in the overall dataset, or in the individual columns as shown.
+
+**iv)** __Is the class/type (e.g. numeric, factor) of each variable appropriate?__
+
+```{r, echo=FALSE}
+summary(data2013)
+```
+I think as is most of the numeric types makes sense for the variables represented. It is clear that `Country` will need to be eliminated since there is only 1 data point for each country. Additionally, we could consider changing some variables to be categorical, namely ones such as `Sanitation.faci` (Access to improved sanitation facilities in percentage) and `Health.exp.pocket` (Percentage of out of pocket health expenditure to total health). They could be categorized as "high" or "low" based on some threshold we establish. For example countries with a percentage of out of pocket health expenditure greater or equal to 4% would be `HIGH`, while all below would be `LOW`, depending on what aspects of the data we wish to highlight. 
+
+### b) Take a look at the response variable LE
+
+**i)** __Make a histogram of LE__
+
+```{r, echo=FALSE}
+ggplot(data2013) + geom_histogram(aes(x = LE), bins = 12, fill = "blue") +
+  labs(title = "Histogram of the life expectancy of different countries", x = "Life expectancy", y = "Frequency")
+```
+It's worth noting that there is a definite skew to the right, with peak instances of ~18 (at life expectancy 75) & ~16 (at life expectancy ~82) appearing at the far right end.
+
+**ii)** __Report summary statistics: min, maximum, mean, sd and median__
+
+```{r, echo=FALSE}
+summary(data2013$LE)
+sd(data2013$LE)
+```
+From the summary statistics we can see that the __min__ is 49.33 (perhaps higher than some would expect), the __maximum__ is 82.43 (perhaps lower than we might expect), __mean__ is 70.84 (reasonable), __sd__ is 9.371366, __median__ is 73.94.
+
+**iii)** __Write a few sentences to summarize the LE worldwide in 2013.__ (**No more than three lines**)
+
+From the 78 country observations in this dataset from 2013 we see that the mean life expectancy is around __71 years__, a very reasonable number given medical advancements in the past decade. It's worth questioning whether there is a disproportionate number of developed countries with (relatively) easy access to healhcare in the dataset, as the histogram might suggest given its skew to the right. Again, the minimum life expectancy (~50 years) and the maximum expectancy (~82 years) are reasonable, but the number of instances of these higher values call into question the randomness of our sample.
+
+### c) A quick exploration for LE vs. Continent
+
+**i)** __Make boxplots of LE by Continent__
+
+```{r}
+data2013 %>% ggplot(aes(x = Continent, y = LE)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+  labs(title = "Boxplots of life expectancy by continent", x = "Continent", y = "Life expectancy")
+```
+
+
+**ii)** __Report the number of countries in each Continent together with the sample means (of LE)__. 
+
+```{r}
+
+```
+
+
+**iii)** _Describe briefly the relationship between LE and Continent. Do you see any peculiarities?_ (**No more than three lines**)
+
+The most notable discrepancy in the boxplots of `Life expectancy` vs. `Continent` is how much lower the median of Africa is compared to all the other continents. Similarly, Europe and Oceania have very high median values. Other interesting observations are the closeness of the median, 1st, & 3rd quartile in Oceania, and the closeness of the median and 1st quartile in North America. Asia and South America seem to show the most balanced values. 
+
+## Question 2 - Explore relationship between LE vs GDP and Continent
+
+### a) LE vs GDP
+
+Let us first examine the relationship between LE and GDP. 
+
+**i)** Fit a linear model of LE vs. GDP
+
+```{r, include=FALSE}
+fit0 <- lm(LE~GDP, data = data2013)
+```
+
++ __Make a scatter plot of x=GDP vs. y=LE. together with the regression line overplayed.__
+```{r, echo=FALSE}
+plot(data2013$GDP, data2013$LE,
+     pch = 16,
+     xlab = "GDP (Gross domestic product per capita",
+     ylab = "Life expectancy",
+     main = "Countries' life expectancy vs. GDP per capita")
+abline(fit0, col="red", lwd=4)
+abline(h=mean(data2013$LE), lwd=5, col="blue")
+```
+It's evident from looking at this plot that a linear model probably isn't the best to describe the data due to the fact that there is a clump of almost vertidal data points on the lower en of GDP that then levels off, with an extreme outlier at the very right. 
+
++ __Report the lm summary statistics__
+```{r, echo=FALSE}
+summary(fit0)
+Anova(fit0)
+```
+Looking at the summary statistics and the `Anova()` output we can see that `GDP` is significant at the .001 level. Given the values reported for a 1 unit increase in GDP per capita (all else being held equal) we would expect a .02922% increase in life expectancy (very small, obviously).
+
+**ii)** __Fit a linear model of LE vs. log(GDP). Here we use natural log__
+
+```{r, include=FALSE}
+data2013.2 <-  data2013 %>% mutate(logGDP = log(GDP))
+fit1 <- lm(LE~logGDP, data = data2013.2)
+```
+
++ __Make another scatter plot of x=log(GDP) vs. y=LE together with the liner model fit__
+
+```{r, echo=FALSE}
+plot(data2013.2$logGDP, data2013.2$LE,
+     pch = 16,
+     xlab = "Log GDP (Gross domestic product per capita)",
+     ylab = "Life expectancy",
+     main = "Countries' life expectancy vs. log GDP per capita")
+abline(fit1, col="red", lwd=4)
+abline(h=mean(data2013.2$LE), lwd=5, col="blue")
+```
+This plot looks much better than just GDP. 
+
++ __Report the lm summary statistics__
+
+```{r}
+summary(fit1)
+Anova(fit1)
+```
+The `logGDP` variable is still signicant at the .001 level, and in fact has a much higher F value and lower P value.
+
+**iii)** __Which is a better model choice? And why?__  
+
+For interpretability the first is preferable, but for fit (which is clearly more important) we should go with `fit1` using `logGDP`, due to the fact that the line fits the data much better, ie better describes the data/minimizes residual error. We can see the adjusted $R^2$ jumped from ~37% to ~78% between the 2 models. 
+
+**iv)** __Use your model in **ii)** regardless your answer in **iii)**. Is log(GDP) significant at .01 level in this model? Write down the LS equation and summarize briefly the relationship between GDP and LE.__
+
+$\hat y = 5.2837 * log(GDP) + 25.7744 $
+
+This shows a positive relationship between `log(GDP)` and `LE`.
+
+### b) LE vs GDP and Continent
+
+Now examine the relationship between LE vs GDP and Continent
+
+**i)** __Fit a model of LE vs. Log(GDP) and Continent. Report the summary.__
+
+```{r, include=FALSE}
+fit2 <- lm(LE~logGDP + Continent, data = data2013.2)
+```
+
+**ii)** __Is Log(GDP) a significant variable at .01 level after controlling for Continent?__
+```{r, echo=FALSE}
+summary(fit2)
+Anova(fit2)
+```
+`Log(GDP)` is a significant variable at .01 level after controlling for `Continent`, as shown in the Anova test above.
+
+**iii)** __Are the means of LE among all Continents the same after controlling for Log(GDP) at .01 level?__
+<!--- TODO come back to this --->
+They are not, as seen in the different $\hat \beta$ values shown in the summary.
+
+**iv)** __Which Continent appears to have the lowest LE after controlling for Log(GDP)?__
+```{r, echo=FALSE}
+unique(data2013.2$Continent)
+levels(data2013.2$Continent)
+```
+`ContinentAfrica` is the base level, and we can see from the summary above that all other continents correspond with an increase in LE compared to this base level continent. This is in line with the observations we made from the boxplots. 
+
+## Question 3 - Model building
+
+We now try to create a parsimonious model to identify important, relevant variables to explain the Life Expectancy. Your professor insists on that GDP should have been taken a log scale! So from now on you may drop GDP from your working data but keep log(GDP) there to avoid any potential problems. 
+
+### a) LASSO
+
+Let us start with a LASSO fit using all the sensible variables in the data. Once again make sure that GDP is in log scale. Use **lambda.min**, **set.seed(555)** and **nfold=10** to get the final LASSO features. 
+
+```{r, echo=FALSE}
+set.seed(555)
+
+names(data2013.2)
+# extract y, Grad.rate
+Y <- data2013.2$LE
+X <- model.matrix(LE~. -Country -GDP, data = data2013.2)[, -1]
+#colnames(X)
+fit.lasso.cv <- cv.glmnet(X, Y, alpha = 1, nfolds = 10)
+#fit.lasso.cv$lambda.1se # 2.284619
+
+#fit_lasso <- cv.glmnet(x_col, y_col, family = "gaussian", alpha = 1)
+plot(fit.lasso.cv, main = "CMV vs Lambda in LASSO")
+```
+
+**i)** __Country names should not be a predictor. Explain why not? (**One sentence**)__
+
+Country names should not be a predictor due to the fact that there are only 1 instance of each value in the dataset, and using them would lead to overfitting (no degrees of freedom).
+
+**ii)** __What is the `lambda.min` value? What does it do in this process?__ (**one or two sentences**)
+
+```{r, echo=FALSE}
+fit.lasso.cv$lambda.min # 0.9011009
+```
+The `lambda.min` value is 0.9011009. Of the possible $\lambda$ values we could choose, this one gives us the smalles `cvm` (mean cv error).
+
+**iii)** __What does the random seed control here? __
+
+This allows us to get the same answer each time ; the main point of using the seed is to be able to reproduce a particular sequence of 'random' numbers, and thus get the same output each time. 
+
+**iv)** What variables are returned using the `lambda.min`? Write down the LASSO prediction equation here. 
+```{r, echo=FALSE}
+coef_1se <- coef(fit.lasso.cv, s = 'lambda.min')
+nzcoef <- rownames(coef_1se)[which((coef_1se) != 0)]
+nzcoef
+lm.input <- as.formula(paste("LE", "~", paste(nzcoef[-1], collapse = "+"))) 
+print("====== LASSO prediction equation ======")
+lm.input
+```
+<!--- come back if there's time --->
+
+### b) Final model
+
+**i)** __Fit a linear model using the features returned from the above LASSO. Perform backward selection until all features are significant at the $\alpha = 0.1$ level to get a final model. Report the summary of your final fit. In particular report the LS equation here. __
+
+```{r}
+fit.lasso <-lm(lm.input, data = data2013.2)
+#summary(fit.lasso)
+Anova(fit.lasso)
+```
+`Water` not significant, so it can be thrown out.
+
+```{r}
+fit.lasso.1 <- update(fit.lasso, .~. -Water)
+summary(fit.lasso.1)
+Anova(fit.lasso.1)
+```
+
+After removing `Water` all remaining variables -- `Unemployment`, `Sanitation.fac`, and `logGDP` -- are significant at the .01 level (at least).
+
+**ii)** __Check to see if the model assumptions are reasonably met. __
+
+```{r, echo=FALSE}
+#<<<<<<<<<< RESIDUAL PLOT -- LINEARITY & HOMOSCEDASTICITY >>>>>>>>>
+plot(fit.lasso.1$fitted.values, fit.lasso.1$residuals,
+     pch = 16,
+     main = "residual plot")
+abline(h=0, lwd=4, col="red")
+#<<<<<<<< QQNORM PLOT FOR NORMALITY >>>>>>>>>
+qqnorm(fit.lasso.1$residuals)
+qqline(fit.lasso.1$residuals, lwd = 4, col="blue")
+```
+
+From the residual plot and the qqnorm plot we can see that the model assumptions of linearity, homoscedasticity & normality are more or less fulfilled. With normality (Q-Q plot) the deviations from the straight line are minimal; this indicates normal distribution. And for the other model assumptions, the residual plot shows points that are pretty symmetrically distributed, though some do not cluster towards the middle of the plot. There aren't any apparent patterns, but the fact that the points on the right side of the plot cluster closer to the smaller y values while those on the left do not does raise some questions.
+
+**iii)** __Write a brief summary of your finding in the final model. __
+
+We find that the variables `Sanitation.fac`, and `logGDP` have a positive effect on a country's life expectancy, while `Unemployment` shows a negative effect on life expectancy from our model. 
+
+**iv)** __Albania is a country that is not in this dataset (year 2013), but some of the statistics in 2013 are given below.__
+
+Albania statistics are:
+
+|Variable|Value|
+|------------------|---------|
+|GDP|4414|
+|Unemployment|16.0|
+|Immunization Measles|96|
+|Fixed.tel|7.64|
+|Health.exp.pocket|49.93|
+|Continent|Europe|
+|Immunization|98|
+|Internet.users|66.36|
+
+`Water` for 2013 is not available. However, we have `Water` from 2000 to 2008:  96.1, 96.2, 96.1, 96.1, 96.1, 96.0, 96.0, 95.9, 95.8.
+
+`Sanitation.faci` for 2013 is not available either. But we do have its `Sanitation.faci` from 2000 to 2008: 83.4, 84.2, 85.0, 85.8, 86.6, 87.4, 88.1, 88.9, 89.6, 
+
+
+__Give an approximate (best possible) 95% Prediction Interval for Albania Life Expectancy in 2013 based on the information above.__
+
+```{r, echo=TRUE}
+Albania <- data2013.2[1,]
+Albania$GDP <-  4414
+Albania$Sanitation.fac <- 0
+Albania$Unemployment <- 16.0
+predict(fit.lasso.1, Albania, interval = 'prediction', se = FALSE)
+
+```
+
+
+## Declaration
+
+_JMH_
+
+By submitting this document you certify that you have complied with the University of Pennsylvania's Code of Academic Integrity, to the best of your knowledge. You further certify that you have taken this exam under its sanctioned conditions, i.e. solely within the set exam room and within the time allotted. 

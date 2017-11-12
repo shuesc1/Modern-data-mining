@@ -352,8 +352,8 @@ cor(county_data$latino_frac, county_data$caucasian_frac)
 # USING REGSUBSETS
 
 Xy <- model.matrix(dem12_frac ~ median_income + total_votes_12 + registered_voters + reg_vote_frac + turnout + hs_diploma_degree + poverty_frac + caucasian_frac + gini_coefficient + median_age + adult_smoking + uninsured + unemployment + violent_crime + infant_mortality + latino_frac + graduate_degree + margin_state_08, county_data)[,-1]
-
-Xy <- data.frame(Xy, county_data$dem12_frac)
+# Xy <- (dem12_frac~.-county-rep12_frac-state)
+Xy <- data.frame(Xy, county_data$dem12_frac) # attach last column
 b<-regsubsets(county_data.dem12_frac~.,Xy)
 plot(summary(b)$cp)
 ```

@@ -1,0 +1,215 @@
+---
+title: "Midterm"
+author: "STAT 471/571/701 Modern Data Mining - Joseph Haymaker" 
+date: "11/07/2017"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(leaps)
+library(car)
+library(glmnet)
+library(tidyverse)
+```
+
+
+**Name your submission using the scheme: `LastName_FirstName_Midterm`. For example: Zhao_Linda_Midterm.rmd or Zhao_Linda_Midterm.pdf or Zhao_Linda_Midterm.html or Zhao_Linda_Midterm.docx**
+
+*Instruction*: This exam requires you to use R. It is completely open book/notes. Write your answers using .rmd format and knitr it into html/pdf/docx. Always attach plots or R-output when needed. If you have trouble formatting the plots, don’t worry about it. We are not looking for pretty solutions, rather to see if you are able to make sense out of data using R. You may write your solution in a word file (no penalty for doing so). Attach your r code at the end of your file as an appendix then. 
+
+\vspace{.2in}
+
+* Data needed:
+/canvas/Files/Special_Midterm_Folder/LifeExpectancy_exam.csv
+
+* Midterm needed (only take one you need): 
+
+    +  /canvas/Files/Special_Midterm_Folder/midterm_fl17.Rmd
+    
+    + /canvas/Files/Special_Midterm_Folder/midterm_fl17.pdf
+    
+    + /canvas/Files/Special_Midterm_Folder/midterm_fl17.docx
+
+* Help:
+As always skip any part you have trouble with and you may come back to finish it if you have time. Ask one of us for help if you are stuck somewhere.
+
+* Electronic submission:
+In the ‘Assignments’ section, go to the ‘Midterm’ assignment and upload your completed files. It takes multiple files. The folder will be closed at 8:10 pm.
+
+* If you have trouble to upload your files, email them to lzhao@wharton.upenn.edu.
+
+\vspace{.1in}
+**Life Expectancy Worldwide**
+
+Life expectancy (denoted as LE) is a measure of how long a person may live.  There is significant variation among different countries world wide. The average was 70.5 (68.5 years for males and 73.5 years for females) over the period 2010–2013. Factors related to life expectancy are complex. In this study we focus on factors such as health care, environment, social economic predictors among other controlling factors.
+
+The goal is to identify important factors associated with Life Expectancy and to be able to quantify the relationship. We will also try to predict life expectancy for some countries. 
+
+Data: A set of statistics from 2000 – 2013 are available. We are using a piece of it after eliminating some missing values. Original Source: World Bank Group's Open Data http://data.worldbank.org/
+
+We use the following code to read the data. 
+
++ **data.all: all the observations**
+
++ **data2013: information for 2013 only**
+
+```{r read data, echo=T}
+# put data in the same folder where this .rmd file is.
+data.all <- read.csv("LifeExpectancy_exam.csv", header = T)
+names(data.all)
+# data2013 is a subset only about 2013
+data2013 <- data.all[data.all$Year==2013, ]
+data2013 <- data2013[, -4] # take "Year" out
+```
+
+|Variable|Description|
+|----------------------|--------------------------------|
+|Country|Country name|
+|LE|Life expectancy|
+|Year|Year|
+|GDP|GDP per capita|
+|Population|Population density|
+|Urban.pop|Percentage of urban population|
+|Household.consump| Household consumption expenditure in million|
+|Unemployment| Unemployment rate|
+|Forest.area| Percentage of forest|
+|Water| Access to improved water source in percentage|
+|Food.prod.index| Food production index|
+|Arable.land| Arable land per capita|
+|Health.expend| Health expenditure percentage of GDP|
+|Immunization| DPT Immunization percentage of children|
+|Sanitation.faci| Access to improved sanitation facilities in percentage| 
+|Immunization.measles| Measles Immunization percentage of children|
+|Health.exp.pocket| Percentage of out of pocket health expenditure to total health| 
+|Fixed.tel| Fixed telephone subscriptions per 100 people|
+|Mobile.cel| Mobile cellular subscriptions per 100 people|
+|Internet.users| Internet users per 100 people|
+|Continent| Continent|
+
+\pagebreak 
+
+## Question 1 - EDA of data2013
+### a) Quick summary
+
+Report the following information:
+
+**i)** Number of variables 
+
+```{r}
+# code block if necessary
+```
+
+**ii)** Number of countries
+
+**iii)** Is there any missing value?
+
+**iv)** Is the class/type (e.g. numeric, factor) of each variable appropriate?
+
+
+
+### b) Take a look at the response variable LE
+
+**i)** Make a histogram of LE
+
+**ii)** Report summary statistics: min, maximum, mean, sd and median
+
+**iii)** Write a few sentences to summarize the LE worldwide in 2013. (**No more than three lines**)
+
+
+### c) A quick exploration for LE vs. Continent
+
+**i)** Make boxplots of LE by Continent 
+
+**ii)** Report the number of countries in each Continent together with the sample means. 
+
+**iii)** Describe briefly the relationship between LE and Continent. Do you see any peculiarities? (**No more than three lines**)
+
+
+## Question 2 - Explore relationship between LE vs GDP and Continent
+
+### a) LE vs GDP
+
+Let us first examine the relationship between LE and GDP. 
+
+**i)** Fit a linear model of LE vs. GDP
++ Make a scatter plot of x=GDP vs. y=LE. together with the regression line overplayed.
++ Report the lm summary statistics
+
+**ii)** Fit a linear model of LE vs. log(GDP). Here we use natural log
++ Make another scatter plot of x=log(GDP) vs. y=LE together with the liner model fit
++ Report the lm summary statistics
+
+**iii)** Which is a better model choice? And why?  
+
+**iv)** Use your model in **ii)** regardless your answer in **iii)**. Is log(GDP) significant at .01 level in this model? Write down the LS equation and summarize briefly the relationship between GDP and LE.
+
+
+### b) LE vs GDP and Continent
+
+Now examine the relationship between LE vs GDP and Continent
+
+**i)** Fit a model of LE vs. Log(GDP) and Continent. Report the summary.
+
+**ii)** Is Log(GDP) a significant variable at .01 level after controlling for Continent?
+
+**iii)** Are the means of LE among all Continents the same after controlling for Log(GDP) at .01 level?
+
+**iv)** Which Continent appears to have the lowest LE after controlling for Log(GDP)?
+
+
+## Question 3 - Model building
+
+We now try to create a parsimonious model to identify important, relevant variables to explain the Life Expectancy. Your professor insists on that GDP should have been taken a log scale! So from now on you may drop GDP from your working data but keep log(GDP) there to avoid any potential problems. 
+
+### a) LASSO
+
+Let us start with a LASSO fit using all the sensible variables in the data. Once again make sure that GDP is in log scale. Use **lambda.min**, **set.seed(555)** and **nfold=10** to get the final LASSO features. 
+
+**i)** Country names should not be a predictor. Explain why not? (**One sentence**)
+
+**ii)** What is the `lambda.min` value? What does it do in this process? (**one or two sentences**)
+
+**iii)** What does the random seed control here? 
+
+**iv)** What variables are returned using the `lambda.min`? Write down the LASSO prediction equation here. 
+
+
+### b) Final model
+
+**i)** Fit a linear model using the features returned from the above LASSO. Perform backward selection until all features are significant at the $\alpha = 0.1$ level to get a final model. Report the summary of your final fit. In particular report the LS equation here. 
+
+**ii)** Check to see if the model assumptions are reasonably met. 
+
+**iii)** Write a brief summary of your finding in the final model. 
+
+**iv)** Albania is a country that is not in this dataset (year 2013), but some of the statistics in 2013 are given below.
+
+Albania statistics are:
+
+|Variable|Value|
+|------------------|---------|
+|GDP|4414|
+|Unemployment|16.0|
+|Immunization Measles|96|
+|Fixed.tel|7.64|
+|Health.exp.pocket|49.93|
+|Continent|Europe|
+|Immunization|98|
+|Internet.users|66.36|
+
+`Water` for 2013 is not available. However, we have `Water` from 2000 to 2008:  96.1, 96.2, 96.1, 96.1, 96.1, 96.0, 96.0, 95.9, 95.8.
+
+`Sanitation.faci` for 2013 is not available either. But we do have its `Sanitation.faci` from 2000 to 2008: 83.4, 84.2, 85.0, 85.8, 86.6, 87.4, 88.1, 88.9, 89.6, 
+
+
+Give an approximate (best possible) 95% Prediction Interval for Albania Life Expectancy in 2013 based on the information above.
+
+
+## Declaration
+
+By submitting this document you certify that you have complied with the University of Pennsylvania's Code of Academic Integrity, to the best of your knowledge. You further certify that you have taken this exam under its sanctioned conditions, i.e. solely within the set exam room and within the time allotted. 
