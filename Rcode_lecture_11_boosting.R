@@ -1,0 +1,177 @@
+#################################
+#### Boosting  ########
+# Text book 8.2.3
+
+## Boosting
+#  - Boosting with the squared error loss
+#  - Forward stagewise
+
+# 1) Boosting 
+# 2) Comparison with RF
+
+###################################
+# Load all packages
+if(!require('pacman')) {
+  install.packages('pacman')}
+pacman::p_load( ISLR, tidyverse, tree, ramdomForest, ISLR, rpart, rattle, pROC, partykit, gbm)
+####################################
+
+# Use Hitters dataset 
+# Goal is to do prediction
+
+library(ISLR)
+help(Hitters)
+data.comp <- na.omit(Hitters)  # For simplicity
+dim(data.comp)            # We are keeping 263 players
+data.comp$LogSalary <- log(data.comp$Salary)  # add LogSalary
+names(data.comp)
+data1 <- data.comp[,-19]  
+
+library(gbm) # boosting machine
+
+data1 <- data1[sample(nrow(data1)), ] # make sure the row number plays no row!
+
+# 1) Boosting in action
+
+# i) get familiar with gbm()
+
+ntree <- 200
+fit.boost <- gbm(LogSalary ~., data = data1, distribution = "gaussian", n.trees = ntree, interaction.depth = 2,
+                 train.fraction = .7)
+
+# arguments:
+# distribution = "gaussian" for continuous response and "bernoulli"/"multinomial" for two/more two/more classes.
+# interation.depth = depth of the tree, the number of splits.  d=1 (default) is a stump tree, i.e. only one split
+# n.trees = number of the trees to be updated, default=100
+
+# train.fraction = training set, the error will be testing error with the remaining data.
+#       Caution: the first train.fraction of the data will be used as a training set
+#                 Make sure the data is in a random order. Default=1                   
+# bag.fraction = fraction of the training data, fraction of the data used for training the next tree
+#                default set at .5
+# shrinkage = 0.001 set as default.
+
+### Output
+
+names(fit.boost)
+fit.boost$fit # hat y
+fit.boost$train.error # training errors 
+fit.boost$valid.error # testing errors if train.fraction is given
+
+
+yhat <- predict(fit.boost, newdata = data1, n.trees = ntree) # prediction, in this case it is the same as fit.boost$fit
+
+# ii) Tune number of trees needed by minimizing the testing errors
+
+### Investigate the testing/training errors vs. number of iterations
+# We may use
+# gbm.perf(object, plot.it = TRUE, method="test")
+
+# Remember that the training data will be the first 80% rows.
+
+ntree <- 20000
+fit.boost <- gbm(LogSalary~., data = data1, distribution = "gaussian", n.trees = ntree, interaction.depth = 2,
+                 train.fraction = .8)
+gbm.perf(fit.boost, method ="test") 
+
+# Output the optimal number of trees by min the testing errors.
+# red: fit.boost$valid.error (testing errors)
+# black:   fit.boost$train.error (training errors)
+
+# Notice the testing errors are smaller than that of training error for many iterations.
+
+# The above plots are same as: 
+plot(fit.boost$valid.error, col= "red", 
+     main="red: testing errors, black: training errors", 
+     ylim = c(0, .9))
+points(fit.boost$train.error, col="black")
+
+# We now use the optimal number of trees as our final prediction function
+
+# To match with the gbm() training and testing data, we set
+
+n.t <- floor(.8*263)
+data.train <- data1[1:n.t, ]   # n.t <- floor(.8*263)
+data.test <- data1[-(1:n.t), ]
+
+B <- gbm.perf(fit.boost, method ="test") # optimal number of trees
+yhat <- predict(fit.boost, newdata = data.test, n.trees = gbm.perf(fit.boost, method ="test") )
+
+fit.boost.test <- mean(yhat-data.test$LogSalary)^2  # the testing error for boosting
+
+## 2)  Comparison: boosting and RF or any other your favorites
+
+#Lastly let's compare the testing errors between random forest and boosting
+
+fit.rf.testing <- randomForest(LogSalary~., data.train, xtest=data.test[, -20], 
+                               ytest=data.test[,20], mtry=6, ntree=500)
+fit.rf.testing$mse[500]   # testing error
+
+### Verify the testing error above
+fit.rf <-randomForest(LogSalary~., data.train,  mtry=6, ntree=500)
+mean((predict(fit.rf, data.test)-data.test[, 20])^2)
+### 
+
+
+# output the testing errors for boosting and rf
+print(c(fit.boost.test,fit.rf.testing$mse[500] )) ### wowwww, who's a winner????
+
+
+##### End of Boosting  ######
+
+### Will try to fill in an example of boosting classification 
+
+
+
+
+
+
+
+##### Boosting for classifications #####
+# Will fill this in
+
+
+
+
+
+##########################################
+### boosting classification ##############
+##########################################
+### Gene data Khan 
+# Will try to fill this in
+# Seems to be a magic: 83 obsn with over 2300 gene expressions points
+ 
+
+
+
+# library(ISLR)
+# gene.train <- data.frame(Khan$xtrain, tumor = Khan$ytrain)
+# gene.test <- data.frame(Khan$xtest, tumor = Khan$ytest)
+# gene <- rbind(gene.train, gene.test)
+# genex <- rbind(data.frame(Khan$xtrain), data.frame(Khan$xtest))
+# names(gene)
+# 
+# library(dplyr)
+# library(data.table)
+# library(ggplot2)
+# gene <- data.table(gene)
+# tmp <- gene[, lapply(.SD, mean), by=tumor]
+# heatmap(genex)
+# 
+# gene.map <- data.frame(id = seq(1:nrow(gene)), genex)
+# gene.map.melt <- melt(gene.map, id="id")
+# gene.map.sub <- gene.map[1:10,]
+# gene.map.sub.melt <- melt(gene.map.sub, id="id")
+# ggplot(gene.map.sub.melt, aes(x=variable, y=id)) + geom_tile(aes(fill=value))
+# 
+# 
+# gene.map.sub <- gene[sample(nrow(gene), 15),]
+# gene.map.sub <- gene.map.sub[order(gene.map.sub$tumor),]
+# gene.map.sub <- data.frame(id = seq(1:nrow(gene.map.sub)), gene.map.sub)
+# gene.map.sub.melt <- melt(gene.map.sub, id="id")
+# ggplot(gene.map.sub.melt, aes(x=variable, y=id)) + 
+#   geom_tile(aes(fill=value)) +
+#   ggtitle("from btm to top: 1-4")
+# data.frame(gene.map.sub$tumor, gene.map.sub$id)
+# 
+# 

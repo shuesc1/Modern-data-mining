@@ -1,0 +1,742 @@
+---
+title: "Lecture 9 - Tree-Based Methods"
+author: "Joseph Haymaker"
+date: "11/14/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Load all packages
+if(!require('pacman')) {
+  install.packages('pacman')}
+pacman::p_load( ISLR, tidyverse, tree, ramdomForest, ISLR, rpart, rattle, pROC, partykit, gbm)
+```
+
+# Tree based methods
++ Text book
+  + 5.2: Bootstrap 
+  + 8.1: Single trees
+  + 8.2: Ensemble methods
+      + Bagging
+      + Random Forest
+      + Boosting
+
+## Part I: regression trees
+
+#### 1) Single Tree
+#### 2) Bagging
+#### 3) Random Forest (Bagging is a special case)
+
+#### 4) Appendices (all about trees)
+#### Appendix I: Testing errors vs. OOB testing erros
+#### Appendix II: Effects for different Bootstrap samples on a single tree
+#### Appendix III: Comparison among a single tree, bagging and rf
+
+#### 5) Boosting 
+
+## Part II: RandomForest for classifications ( a separate file)
+
+```{r}
+library(tree)              # regression/classification trees
+library(randomForest)      # to see how a package is evolved to be better: rfNews()
+```
+
+#####  Part I: Regression trees
+For the purpose of demonstration we use the Baseball data from the book.
++ Goal: predict log salary given the past performance!
+
+```{r}
+library(ISLR)
+help(Hitters)
+data.comp <- na.omit(Hitters)  # For simplicity
+dim(data.comp)            # We are keeping 263 players
+data.comp$LogSalary <- log(data.comp$Salary)  # add LogSalary
+names(data.comp)
+data1 <- data.comp[,-19]        # Take Salary out
+```
+
+
+#### 1) A single tree
+
+The idea is to partition the space into boxes. 
+  + `Binary split`: Take the best predictor 
+  + `Recursive`: Repeat the search in the next half space
+  + `The prediction`:  sample mean in each box.
+  + (one could use different method: reg for example)
+
+__A single tree__
++ Pros:
+  + not a linear model, more flexible
+  + take interactions among variables
+  + simple interpretation of the prediction
++ Cons:
+  + not stable
+  + overfitting or not a good prediction
+
+We use it here to illustrate the idea of binary, top-down, recursive trees.
+
+##### Model 0: 
+
+a) Use `CAtBat` alone to see the step function
++ Good start to understand a tree.
+
+```{r}
+par(mfrow=c(2,1))
+
+# First optimal split: the node and the estimates
+plot(NA, NA, type = "n", xlim = c(0,10000), ylim = c(4, 8), xlab = "CAtBat", ylab = "LogSalary")
+points(data1$CAtBat, data1$LogSalary, pch=16)
+abline(v=1452, col= "red", lwd=4) 
+lines(x = c(0,1452), y = c(5.09, 5.09), lwd=3, col="blue")
+lines(x = c(1452, 10000), y = c(6.46, 6.46), lwd=3, col="blue")
+
+
+fit0.single <- tree(LogSalary~CAtBat, data1)
+plot(fit0.single)
+text(fit0.single, pretty=0)   # add the split variables
+
+par(mfrow=c(1,1))
+
+fit0.single$frame   # details in each split
+
+summary(fit0.single)
+```
+
+```
+ var   n        dev     yval splits.cutleft splits.cutright
+ 1 CAtBat 263 207.153733 5.927222          <1452           >1452
+ 2 CAtBat 103  36.219531 5.092883           <688            >688
+ 4 CAtBat  54  18.324402 4.764117         <211.5          >211.5
+ 8 <leaf>   5  10.550154 5.496828                               
+ 9 <leaf>  49   4.816009 4.689350                               
+ 5 <leaf>  49   5.626109 5.455197                               
+ 3 CAtBat 160  53.076591 6.464327        <1772.5         >1772.5
+ 6 <leaf>  20   3.593939 6.055648                               
+ 7 <leaf> 140  45.665082 6.522710      
+```
+
+b) Use `CHits` alone to see the step function 
+
+```{r}
+par(mfrow=c(2,1))
+plot(data1$CHits, data1$LogSalary, pch=16)
+fit0.single <- tree(LogSalary~CHits, data1)
+plot(fit0.single)
+text(fit0.single, pretty=0)  # add the splits
+par(mfrow=c(1,1))
+fit0.single$frame  # report the nodes
+```
+
+```
+#       var   n         dev     yval splits.cutleft splits.cutright
+# 1   CHits 263 207.1537331 5.927222           <358            >358
+# 2   CHits 101  35.2429757 5.083074           <182            >182
+# 4   CHits  56  18.3590026 4.771243          <49.5           >49.5
+# 8  <leaf>   5   9.3315033 5.660001                               
+# 9   CHits  51   4.6908471 4.684110           <132            >132
+# 18 <leaf>  34   1.6206148 4.533326                               
+# 19 <leaf>  17   0.7511846 4.985678                               
+# 5  <leaf>  45   4.6621832 5.471130                               
+# 3   CHits 162  55.0688493 6.453511           <450            >450
+# 6  <leaf>  16   3.2773291 5.878956                               
+# 7  <leaf> 146  45.9308869 6.516476      
+```
+
+##### Model 1: Use all the obs'n but only include two variables CHits and CAtBat
+
+```{r}
+fit1.single <- tree(LogSalary~CAtBat+CHits, data1) # The order plays no role
+fit1.single
+names(fit1.single)
+fit1.single$frame 
+```
+
+```
+       var   n         dev     yval splits.cutleft splits.cutright
+  1  CAtBat 263 207.1537331 5.927222          <1452           >1452
+  2   CHits 103  36.2195305 5.092883           <182            >182
+  4   CHits  56  18.3590026 4.771243          <49.5           >49.5
+  8  <leaf>   5   9.3315033 5.660001                               
+  9   CHits  51   4.6908471 4.684110           <132            >132
+  18 <leaf>  34   1.6206148 4.533326                               
+  19 <leaf>  17   0.7511846 4.985678                               
+  5  <leaf>  47   5.1645460 5.476113                               
+  3   CHits 160  53.0765908 6.464327           <669            >669
+  6  <leaf>  50   9.5004560 6.213632                               
+  7  <leaf> 110  39.0053795 6.578279   
+```
+
+```{r}
+plot(fit1.single)
+text(fit1.single, pretty=0) 
+```
+     
++ `pretty`=0 only affect the categorical var's. The names will be shown.
++ It has 6 terminal nodes. That means we partition `CAtBat` and `Chits` into six boxes. 
++ The predicted values are the sample means in each box.
+
+```{r}
+fit1.single.result <- summary(fit1.single)
+names(fit1.single.result)
+
+fit1.single.result$dev # dev=RSS. 
+fit1.single.result$size  # number of nodes
+fit1.single.result$df  # n- number of nodes
+```
+
+
++ RSS=65.37. It should be same as the sum of RSS at each `terminal node``
++ 9.332+1.621+0.751+5.165+9.500+39.010=65.38 (should be the same)
+
+```{r}
+yhat <- predict(fit1.single, data1)  # only size=6 many predicted values
+RSS.tree <- sum((data1$LogSalary-yhat)^2 )   # another way to get RSS
+RSS.tree  #or 
+sum((fit1.single.result$res)^2)
+# [1] 65.37368
+
+plot(data1$LogSalary, yhat, pch=16, col="blue",
+     xlab="LogSal",
+     ylab="Yhat")
+```
+
+As we already knew there are only __6 predicted values__ being used.
+
+__QUESTION__: How does the above tree perform comparing with our old friend lm in terms of the in sample errors?
+
+```{r}
+fit.lm <- summary(lm(LogSalary~CAtBat+CHits, data1))
+RSS.lm <- (263-2)*(fit.lm$sigma)^2
+RSS.lm ## Oppps much worse than even a single tree. 
+# [1] 127.2509   RSS.tree=65, in sample RSS is much smaller from the above tree.
+```
+
+##### An alternative tree (I like its output)
+
+```{r}
+library(rpart)
+fit.single.rp <- rpart(LogSalary~CAtBat+CHits, data1, minsplit=20, cp=.009)
+fit.single.rp 
+plot(fit.single.rp)
+text(fit.single.rp, pretty = TRUE)   # plot method 1
+summary(fit.single.rp)
+```
+
+`fancyRpartPlot` does seem to work with the current R version
+
+
+```{r}
+#install.packages('rattle')
+#install.packages("RGtk2")
+# library(RGtk2)
+# library(rattle)  # rattle is needed to produce a neat tree coupled with rpart
+library(partykit) # as.party
+
+#fancyRpartPlot(fit.single.rp) # plot method 2  (can't get it work)
+plot(as.party(fit.single.rp), main="Final Tree with Rpart") # method 3
+```
+
+The plots are only useful for a small tree!
+
+##### Model 2:  use all the predictors
+
+```{r}
+fit1.single.full <- tree(LogSalary~., data1) 
+```
+
+We can control how large a tree we want to build: 
+
+  + `control=tree.control( minsize = 6, mindev = 0.05))`      
+  + the default `tree.control(nobs, mincut = 5, minsize = 10, mindev = 0.01)`
+  + `mincut`: min number of obs’n to be included in a child
+  + `minsize`: number of end nodes
+  + `mindev`: the dev needs to be reduced by mindev fold within the branch: `dev_new < mindev * dev_parent`
+
+Here is the tree:
+
+```{r}
+plot(fit1.single.full)  
+text(fit1.single.full, pretty=0)
+fit1.single.full$frame
+
+fit1.single.full.s <- summary(fit1.single.full)
+names(fit1.single.full.s)
+names(fit1.single.full)
+
+fit1.single.full.s$dev  # RSS=43.03
+sum((fit1.single.full.s$residuals)^2) # to check the dev is the RSS
+
+fit1.single.full.s$used # Var's included 
+```
+
+7 variables are used:
+
++ `CAtBat`, `CHits`, `AtBat`, `CRuns`, `Hits`, `Walks`, `CRBI`
++ There are 9 terminal nodes
+
+```{r}
+fit1.single.full.s$size
+
+RSS.lm <- (263-8)*((summary(lm(LogSalary~CAtBat+CHits+AtBat+CRuns+Hits+Walks+CRBI, data1)))$sigma)^2
+RSS.lm   # Still pretty big 101.5803
+```
+
+__Question__: do you expect that the testing `RSS(lm)` > `RSS(single tree)` ?
+
+### 2)  Bagging: general method
+
+```
+Algorithm:
+  1) Take B many bootstrap samples
+  2) One tree for each B sample
+  3) The final predictor = Average of all B  trees
+  4) It is a special case for Random Forest
+```
++ __Pros__: Reduce the var while maintain similar bias. 
++ __Cons__: The trees are correlated (on higher level). 
+
+### 3) Random Forest
+
+```
+Algorithm:
+  1) Take B many bootstrap samples
+  2) Build a deep random tree for each Bootstrap sample by
+    * Split only m (mtry) randomly chosen predictors at each split
+  3) Bag all the random trees by taking average => prediction of y given x_1,... x_p
+  4) Use Out of Bag testing errors to tune mtry!!!!! 
+```
+
++ __Pros__: Decorrelate the trees - reduce var more
++ __Cons__: Tuning parameter `m` is introduced 
+  + `m` too small - miss important var's
+  + `m` too large - more cor between trees
+
+Remark: 
+1) nodesize:5 for reg's and 1 for classifications
+2) when mtry=p (=19), randomForest gives us bagging estimates.
+
+```{r}
+library(randomForest)
+```
+
+i) For a fixed mtry
+
+```{r}
+fit.rf <- randomForest(LogSalary~., data1, mtry=6, ntree=100)
+plot(fit.rf)  # repeat this and you see variability in the plots why so???
+str(fit.rf)
+```
+
+default settings: 
++ `mtry`=p/3, (sqrt(p) in classification tree)
++ Bootstrap size `B`=`ntree`=500 
++ when `mtry`=`p`=19, randomForest gives us bagging estimates.
++ nodesize:5 for reg's, and 1 for classifications. 
+
+Based on the 100 random trees, we get hat y= ave (all 100 trees).
+How does it perform? 
+
+```{r}
+yhat <- predict(fit.rf, data1)   # predicted values we use 
+
+plot(data1$LogSalary, yhat, pch=16,  # add a 45 degree line:looks very good!
+     main="Y vs. Predicted Y", col="blue")
+abline(0, 1, lwd=5, col="red")
+
+mse.train <- mean((data1$LogSalary-yhat)^2)  # RSS= sum((data1$LogSalary-yhat)^2)
+mse.train      # Training mse approx. .03!!!
+mse.oob <- mean((data1$LogSalary-fit.rf$predicted)^2)  #OOB testing error 
+mse.oob        # about .18  
+```
+
+
+ii) Zoom in to a RF estimate
+
+```{r}
+fit.rf <- randomForest(LogSalary~., data1, mtry=10, ntree=100)
+#fit.rf <- randomForest(LogSalary~., data1, mtry=10, ntree=2)
+str(fit.rf)
+```
+
+
+a) Where is cross validation testing error? It is cleverly replaced by OOB mse
+
+```{r}
+par(mfrow=c(2,1))
+plot(fit.rf$mse, xlab="number of trees", col="blue",
+     ylab="ave mse up to i many trees using OOB predicted",
+     pch=16) # We only need about 100 trees for this 
+# We get the above plot by 
+plot(fit.rf, type="p", pch=16,col="blue" )
+par(mfrow=c(1,1))
+```
+
+b) OOB's are used
+
+```{r}
+fit.rf$oob.times  # how many times each obs'n belong to OOB. We expect to see 1/e=1/3 (.37)
+
+#   fit.rf$mse is OOB testing errors = mse of only using the OOB fitted values up to tree number
+#   fit.rf$predicted is obtained only using the OOB obs'n 
+
+# fit.rf$predicted[]   # predicted values based on all OOB values. we use this to estimate the mse which is approx. the testing error
+# predict(fit.rf, data1)  # predicted values based on the RF. this will be sued for predictions.
+
+plot(fit.rf$predicted,predict(fit.rf, data1), pch=16, col="blue",
+     main="RF prediction vs. OOB prediction",
+     xlab="Fitted using OOB only",
+     ylab="Fitted using RF")
+abline(0, 1, col="red", lwd=5)   # They differ but not by too much.
+```
+
+
+b) Ready to tune `mtry` and `B`=number of the trees in the bag
+
+i) `ntree` effect: given mtry and ntree, we see the effect of ntree first
+
+```{r}
+fit.rf <- randomForest(LogSalary~., data1, mtry=10, ntree=500)
+plot(fit.rf, col="red", pch=16, type="p", main="default plot, OOB errors")
+```
+
+We may need 250 trees to settle the OOB testing errors
+
+ii) The effect of `mtry`: the number of random split at each leaf
+
+Now we fix `ntree`=250, We only want to compare the OOB mse[250] to see the mtry effects.
+
+Here we loop `mtry` from 1 to 19 and return the testing OOB errors
+
+```{r}
+par(mfrow=c(3,1))
+rf.error.p <- 1:19  # set up a vector of length 19
+for (p in 1:19)  # repeat the following code inside { } 19 times
+{
+  fit.rf <- randomForest(LogSalary~., data1, mtry=p, ntree=250)  
+  #plot(fit.rf, col= p, lwd = 3)
+  rf.error.p[p] <- fit.rf$mse[250]  # collecting oob mse based on 250 trees
+}
+rf.error.p   # oob mse returned: should be a vector of 19
+
+plot(1:19, rf.error.p, pch=16,
+     xlab="mtry",
+     ylab="mse of mtry") 
+```
+
+Run above loop a few time, it is not very stable. 
+
+__Notice__
+1) mtry = 1 is clearly not a good choice.
+2) The recommended mtry for reg trees are mtry=p/3=19/3 about 6 or 7. Seems to agree with this example. Are you convinced with p/3?
+
+We should treat `mtry` to be a tuning parameter!!!!!!!!  
+
+c) The final fit: we take `mtry`=6
+
+```{r}
+fit.rf.final <- randomForest(LogSalary~., data1, mtry=6, ntree=250)
+plot(fit.rf.final)
+fit.rf.final$mse[250] # approx is same as the testing error
+```
+
+d) Prediction
+
+```{r}
+person <- data1[1, ]   # Let's predict rownames(data1)[1]: "-Alan Ashby"
+fit.person <- predict(fit.rf.final, person)
+fit.person # the fitted salary in log scale is 6.196343 (may not be the same each time we run the rf, why?)
+# -Alan Ashby 
+# 6.170148 
+
+# Alan Ashby's true log sal 
+data1$LogSalary[1]
+# [1] 6.163315
+```
+
+
+End of randomForest in regressions.  
+
+### 4) Appendices
+
+### Appendix I: Testing errors vs. OOB testing erros
+
+We could also get testing errors w/o using OOB idea
+The following code verify that OOB errors seem to be a good estimate of testing errors.
+
+```{r}
+n <- nrow(data1)
+#set.seed(1)
+train.index <- sample(n, n*3/4) # we use about 3/4 of the subjects as the training data.
+train.index
+data.train <- data1[train.index,]
+data.test <- data1[-train.index, ]
+
+fit.rf.train <- randomForest(LogSalary~., data.train,  mtry=6, ntree=500) 
+```
+
+This will output the oob errors
+
+To get testing error:
+
+```{r}
+fit.rf.testing <- randomForest(LogSalary~., data.train, xtest=data.test[, -20], 
+                          ytest=data.test[,20], mtry=6, ntree=500)
+# fit.rf.testing$mse
+```
+
+
+This will output the testing errors directly
+
+```{r}
+plot(fit.rf.testing$mse)
+
+plot(fit.rf.train) # when xtest and ytest are given, the output will be for testing data, like y, mse, etc
+```
+
+The testing errors seem to agree with what we found using OOB errors.
+
+Let's put testing errors and OOB errors together
+
+```{r}
+plot(1:500, fit.rf.testing$mse, col="red", pch=16,
+     xlab="number of trees",
+     ylab="mse",
+     main="mse's of RF: blue=oob errors, red=testing errors")
+points(1:500, fit.rf.train$mse, col="blue", pch=16)
+```
+
+OOB errors seem to do ok to estimate the testing errors!!!
+Not bad at all.....
+
+
+### Appendix II: Effects for different Bootstrap samples on a single tree
+
++ Trees built by resampling the data through BOOTSTRAP method
++ Take a bootstrap sample and exam the tree built by the sample
+  i) About 2/3 of the original subjects are chosen in each Bootstrap sample
+  ii) The trees are different
+  ii) mse changes a lot
+
+```{r}
+RSS <- 0  # initial values
+n.unique <- 0
+n <- nrow(data1); K <- 20
+# for (i in 1:K)
+# {
+#   index1 <- sample(n, n, replace=TRUE)   
+#   Sample1 <- data1[index1, ]               # Take a bootstrap sample
+#   fit1.boot <- tree(LogSalary~., Sample1)  # Get a tree fit
+#   RSS[i] <- summary(fit1.boot)$dev  # output RSS for each bootstrap tree
+#   plot(fit1.boot, 
+#        main="Trees with a Bootstrap sample") 
+#   text(fit1.boot, pretty=0)
+#   n.unique[i] <- length(unique(index1))
+#   Sys.sleep(2)                        # Pause for 2 seconds before running for next round
+# }
+# 
+# hist(RSS, breaks=30, 
+#      col="blue",
+#      main="RSS from different Bootstrap trees")
+# 
+# 
+# hist(n.unique, breaks=30,
+#      col="red", 
+#      main="number of unique subjects included in each Bootstrap sample")
+# 
+# hist(n-n.unique, breaks=30,
+#      col="green", 
+#      main="number of OOB subjects not included in each Bootstrap sample")
+```
+
+```{r}
+RSS <- 0  # initial values
+n.unique <- 0
+n <- nrow(data1); K <- 20
+# for (i in 1:K)
+# {
+#   index1 <- sample(n, n, replace=TRUE)   
+#   Sample1 <- data1[index1, ]               # Take a bootstrap sample
+#   fit1.boot <- tree(LogSalary~., Sample1)  # Get a tree fit
+#   RSS[i] <- summary(fit1.boot)$dev  # output RSS for each bootstrap tree
+#   plot(fit1.boot, 
+#        main="Trees with a Bootstrap sample") 
+#   text(fit1.boot, pretty=0)
+#   n.unique[i] <- length(unique(index1))
+#   Sys.sleep(2)                        # Pause for 2 seconds before running for next round
+# }
+# 
+# hist(RSS, breaks=30, 
+#      col="blue",
+#      main="RSS from different Bootstrap trees")
+# 
+# 
+# hist(n.unique, breaks=30,
+#      col="red", 
+#      main="number of unique subjects included in each Bootstrap sample")
+# 
+# hist(n-n.unique, breaks=30,
+#      col="green", 
+#      main="number of OOB subjects not included in each Bootstrap sample")
+```
+
+### Appendix III: Compare a single tree, a bag with 100 trees and a RF with mtry=10, 100 trees
+
+A single tree
+
+```{r}
+fit.single <- randomForest(LogSalary~., data1, mtry=19, ntree=1)
+```
+
+Bagging with 100 Bootstrap samples
+
+```{r}
+fit.bagging <- randomForest(LogSalary~., data1, mtry=19, ntree=100)
+```
+
+Random Forest
+
+```{r}
+fit.rf <- randomForest(LogSalary~., data1, mtry=6, ntree=100)
+```
+
+
+Compare performance among the three methods graphically:
+
+```{r}
+par(mfrow=c(3,1))
+ylim.0 <- c(3.5, 7.5)
+plot(data1$LogSalary, predict(fit.single, data1), pch=16,  # add a 45 degree line:looks very good!
+     ylim=ylim.0,
+     main="A single tree", col="blue")
+abline(0, 1, lwd=5, col="red")
+
+plot(data1$LogSalary, predict(fit.bagging), pch=16,  # add a 45 degree line:looks very good!
+     ylim=ylim.0,
+     main="A bagging tree, 100 trees", col="blue")
+abline(0, 1, lwd=5, col="red")
+
+plot(data1$LogSalary, predict(fit.rf), pch=16,  # add a 45 degree line:looks very good!
+     ylim=ylim.0,
+     main="A RF tree, mtry=10, 100 trees", col="blue")
+abline(0, 1, lwd=5, col="red")
+par(mfrow=c(1,1))
+```
+
+Testing errors through OOB among the three:
+
+```{r}
+c(fit.single$mse, fit.bagging$mse[100], fit.rf$mse[100])
+```
+
+RF is the best (??) but it should have performed much better than a bagging estimate.
+Are the three mse's comparable????
+
+#### 5) Boosting
+
+```{r}
+library(gbm) # boosting machine
+data1 <- data1[sample(nrow(data1)), ] # make sure the row number plays no row!
+```
+
+
+i) Boosting in action
+
+```{r}
+ntree <- 200
+fit.boost <- gbm(LogSalary ~., data = data1, distribution = "gaussian", n.trees = ntree, interaction.depth = 2,
+                 train.fraction = .7)
+```
+
+__arguments:__
+
++ `distribution` = "gaussian" for continuous response and "bernoulli"/"multinomial" for two/more two/more classes.
++ `interation.depth` = depth of the tree, the number of splits.  d=1 (default) is a stump tree, i.e. only one split
++ `n.trees` = number of the trees to be updated, default=100
++ `train.fraction` = training set, the error will be testing error with the remaining data.
+ __Caution__: the first train.fraction of the data will be used as a training set
+    + Make sure the data is in a random order.                    
++ `bag.fraction` = fraction of the training data, fraction of the data used for training the next tree
+               default set at .5
++ `shrinkage` = 0.001 set as default.
+
+##### Output
+
+```{r}
+names(fit.boost)
+fit.boost$fit # hat y
+fit.boost$train.error # training errors 
+fit.boost$valid.error # testing errors if train.fraction is given
+
+yhat <- predict(fit.boost, newdata = data1, n.trees = ntree) # prediction, in this case it is the same as fit.boost$fit
+```
+
+ii) Tune number of trees needed by minimizing the testing errors
+
+Investigate the testing/training errors vs. number of iterations
+We may use:
+`gbm.perf(object, plot.it = TRUE, method="test")`
+
+__Remember that the training data will be the first 80% rows.__
+
+```{r}
+ntree <- 20000
+fit.boost <- gbm(LogSalary~., data = data1, distribution = "gaussian", n.trees = ntree, interaction.depth = 2,
+                 train.fraction = .8)
+gbm.perf(fit.boost, method ="test") 
+```
+
+Output the optimal number of trees by min the testing errors.
++ red: `fit.boost$valid.error` (testing errors)
++ black: `fit.boost$train.error` (training errors)
+
+Notice the testing errors are smaller than that of training error for many iterations.
+
+The above plots are same as: 
+
+```{r}
+plot(fit.boost$valid.error, col= "red", 
+     main="red: testing errors, black: training errors", 
+     ylim = c(0, .9))
+points(fit.boost$train.error, col="black")
+```
+
+We now use the optimal number of trees as our final prediction function
+
+To match with the gbm() training and testing data, we set:
+
+```{r}
+n.t <- floor(.8*263)
+data.train <- data1[1:n.t, ]   # n.t <- floor(.8*263)
+data.test <- data1[-(1:n.t), ]
+
+B <- gbm.perf(fit.boost, method ="test") # optimal number of trees
+yhat <- predict(fit.boost, newdata = data.test, n.trees = gbm.perf(fit.boost, method ="test") )
+
+fit.boost.test <- mean(yhat-data.test$LogSalary)^2  # the testing error for boosting
+```
+
+iii)  Lastly let's compare the testing errors between random forest and boosting
+
+```{r}
+fit.rf.testing <- randomForest(LogSalary~., data.train, xtest=data.test[, -20], 
+                                         ytest=data.test[,20], mtry=6, ntree=500)
+fit.rf.testing$mse[500]   # testing error
+```
+
+output the testing errors for boosting and rf
+
+```{r}
+print(c(fit.boost.test,fit.rf.testing$mse[500] )) ### wowwww, who's a winner????
+```
+
+
+
+
+
+
+
+
+
+
+
